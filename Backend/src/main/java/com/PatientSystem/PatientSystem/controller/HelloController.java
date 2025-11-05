@@ -1,4 +1,4 @@
-package com.PatientSystem.PatientSystem;
+package com.PatientSystem.PatientSystem.controller;
 
 import org.springframework.web.bind.annotation.CrossOrigin;
 import org.springframework.web.bind.annotation.GetMapping;

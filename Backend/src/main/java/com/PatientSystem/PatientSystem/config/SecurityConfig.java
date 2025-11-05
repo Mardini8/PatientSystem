@@ -1,4 +1,4 @@
-package com.PatientSystem.PatientSystem;
+package com.PatientSystem.PatientSystem.config;
 
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -12,18 +12,13 @@ public class SecurityConfig {
 
     @Bean
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
-        // Inaktivera CSRF-skydd (nödvändigt för API-anrop från en separat frontend)
         http.csrf(csrf -> csrf.disable())
-                // Konfigurera auktorisation för inkommande HTTP-förfrågningar
                 .authorizeHttpRequests(auth -> auth
-                        // Tillåt ALLA anrop till vår test-slutpunkt /api/hello
-                        .requestMatchers("/api/hello").permitAll()
-                        // Alla andra förfrågningar kräver autentisering (standardinställningen för nu)
+                        // Tillåt ALLA anrop till både /api/hello och alla /api/patients-anrop
+                        .requestMatchers("/api/hello", "/api/patients/**").permitAll()
+                        // Alla andra förfrågningar kräver autentisering
                         .anyRequest().authenticated()
                 );
-
-        // Eftersom vi inte skickar någon autentiseringsinformation i detta enkla test,
-        // och vi bara vill se "Hello World", behöver vi inte konfigurera formulärlogin eller HTTP Basic.
 
         return http.build();
     }
