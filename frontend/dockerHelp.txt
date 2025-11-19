@@ -1,0 +1,6 @@
+docker build -t patientsystem-frontend .
+docker rm -f patientsystem-frontend
+docker run -d \
+    --name patientsystem-frontend \
+    -p 3000:80 \
+    patientsystem-frontend
