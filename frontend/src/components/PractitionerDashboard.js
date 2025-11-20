@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import MessagingSystem from './MessagingSystem';
+import API_CONFIG from '../config/api';
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = API_CONFIG.CLINICAL_SERVICE;
 
 function PractitionerDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('patients');
@@ -20,7 +21,7 @@ function PractitionerDashboard({ user, onLogout }) {
     const fetchPatients = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/patients`);
+            const response = await fetch(`${API_URL}/api/patients`);
             if (response.ok) {
                 const data = await response.json();
                 setPatients(data);
@@ -241,9 +242,9 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
             const patientPersonnummer = patient.socialSecurityNumber;
 
             const [obsRes, condRes, encRes] = await Promise.all([
-                fetch(`http://localhost:8080/api/v1/clinical/observations/patient/${patientPersonnummer}`),
-                fetch(`http://localhost:8080/api/v1/clinical/conditions/patient/${patientPersonnummer}`),
-                fetch(`http://localhost:8080/api/v1/clinical/encounters/patient/${patientPersonnummer}`)
+                fetch(`${API_URL}/api/v1/clinical/observations/patient/${patientPersonnummer}`),
+                fetch(`${API_URL}/api/v1/clinical/conditions/patient/${patientPersonnummer}`),
+                fetch(`${API_URL}/api/v1/clinical/encounters/patient/${patientPersonnummer}`)
             ]);
 
             if (obsRes.ok) {
@@ -266,7 +267,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
     const handleAddObservation = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:8080/api/v1/clinical/observations', {
+            const response = await fetch(`${API_URL}/api/v1/clinical/observations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -303,7 +304,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
     const handleAddCondition = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:8080/api/v1/clinical/conditions', {
+            const response = await fetch(`${API_URL}/api/v1/clinical/conditions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -336,7 +337,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
     const handleAddEncounter = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch('http://localhost:8080/api/v1/clinical/encounters', {
+            const response = await fetch(`${API_URL}/api/v1/clinical/encounters`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({

@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:8080/api';
+import API_CONFIG from '../config/api';
 
 function MessagingSystem({ currentUser, patientPersonnummer }) {
     const [messages, setMessages] = useState([]);
@@ -30,45 +29,47 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
 
     const fetchUserMappings = async () => {
         try {
-            const practResponse = await fetch(`${API_URL}/practitioners`);
+            const practResponse = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (practResponse.ok) {
                 const practitioners = await practResponse.json();
 
                 const mappings = {};
                 for (const pract of practitioners) {
                     try {
-                        const userResponse = await fetch(`${API_URL}/v1/auth/user-by-foreign/${pract.socialSecurityNumber}`);
+                        const userResponse = await fetch(
+                            `${API_CONFIG.USER_SERVICE}/api/v1/auth/user-by-foreign/${pract.socialSecurityNumber}`
+                        );
                         if (userResponse.ok) {
                             const user = await userResponse.json();
                             mappings[user.id] = pract.socialSecurityNumber;
-                            console.log(`Mapped User ID ${user.id} -> Practitioner UUID ${pract.socialSecurityNumber} (${pract.firstName} ${pract.lastName})`);
                         }
                     } catch (e) {
+                        // Ignore
                     }
                 }
                 console.log('User ID -> Foreign ID mappings:', mappings);
                 setUserIdToForeignId(mappings);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av user mappings:', error);
+            console.error('Error fetching user mappings:', error);
         }
     };
 
     const fetchAllPatients = async () => {
         try {
-            const response = await fetch(`${API_URL}/patients`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
                 const data = await response.json();
                 setPatients(data);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av patienter:', error);
+            console.error('Error fetching patients:', error);
         }
     };
 
     const fetchAllPatientNames = async () => {
         try {
-            const response = await fetch(`${API_URL}/patients`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
                 const patients = await response.json();
                 const names = {};
@@ -78,13 +79,13 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                 setPatientNames(names);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av patientnamn:', error);
+            console.error('Error fetching patient names:', error);
         }
     };
 
     const fetchAllPractitionerNames = async () => {
         try {
-            const response = await fetch(`${API_URL}/practitioners`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (response.ok) {
                 const practitioners = await response.json();
                 const names = {};
@@ -94,7 +95,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                 setPractitionerNames(names);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av practitioner-namn:', error);
+            console.error('Error fetching practitioner names:', error);
         }
     };
 
@@ -114,15 +115,15 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         try {
             let allMessages = [];
             if (currentUser.role === 'PATIENT') {
-                const url = `${API_URL}/v1/messages/patient/${patientPersonnummer}`;
+                const url = `${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/patient/${patientPersonnummer}`;
                 const response = await fetch(url);
                 if (response.ok) {
                     allMessages = await response.json();
                 }
             } else {
                 const [toMeRes, fromMeRes] = await Promise.all([
-                    fetch(`${API_URL}/v1/messages/to-user/${currentUser.id}`),
-                    fetch(`${API_URL}/v1/messages/from-user/${currentUser.id}`)
+                    fetch(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/to-user/${currentUser.id}`),
+                    fetch(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/from-user/${currentUser.id}`)
                 ]);
 
                 const toMe = toMeRes.ok ? await toMeRes.json() : [];
@@ -133,7 +134,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
             allMessages.sort((a, b) => new Date(b.sentAt) - new Date(a.sentAt));
             setMessages(allMessages);
         } catch (error) {
-            console.error('Fel vid hämtning av meddelanden:', error);
+            console.error('Error fetching messages:', error);
         } finally {
             setLoading(false);
         }
@@ -141,13 +142,13 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
 
     const fetchRecipients = async () => {
         try {
-            const response = await fetch(`${API_URL}/practitioners`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (response.ok) {
                 const data = await response.json();
                 setRecipients(data);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av mottagare:', error);
+            console.error('Error fetching recipients:', error);
         }
     };
 
@@ -164,7 +165,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
 
     const sendMessage = async () => {
         if (!newMessage.trim()) {
-            alert('Meddelandet får inte vara tomt');
+            alert('Message cannot be empty');
             return;
         }
 
@@ -176,16 +177,18 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                 toUserId = replyTo.fromUserId;
                 messagePatientPersonnummer = patientPersonnummer;
             } else if (selectedRecipient) {
-                const userResponse = await fetch(`${API_URL}/v1/auth/user-by-foreign/${selectedRecipient}`);
+                const userResponse = await fetch(
+                    `${API_CONFIG.USER_SERVICE}/api/v1/auth/user-by-foreign/${selectedRecipient}`
+                );
                 if (!userResponse.ok) {
-                    alert('Kunde inte hitta mottagaren');
+                    alert('Could not find recipient');
                     return;
                 }
                 const recipientUser = await userResponse.json();
                 toUserId = recipientUser.id;
                 messagePatientPersonnummer = patientPersonnummer;
             } else {
-                alert('Välj en mottagare');
+                alert('Select a recipient');
                 return;
             }
         } else {
@@ -194,12 +197,14 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                 messagePatientPersonnummer = replyTo.patientPersonnummer;
             } else {
                 if (!selectedPatient) {
-                    alert('Välj en patient');
+                    alert('Select a patient');
                     return;
                 }
-                const userResponse = await fetch(`${API_URL}/v1/auth/user-by-foreign/${selectedPatient}`);
+                const userResponse = await fetch(
+                    `${API_CONFIG.USER_SERVICE}/api/v1/auth/user-by-foreign/${selectedPatient}`
+                );
                 if (!userResponse.ok) {
-                    alert('Kunde inte hitta patient-användaren');
+                    alert('Could not find patient user');
                     return;
                 }
                 const patientUser = await userResponse.json();
@@ -209,7 +214,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         }
 
         try {
-            const response = await fetch(`${API_URL}/v1/messages`, {
+            const response = await fetch(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -228,16 +233,19 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                 setSelectedPatient(null);
                 setReplyTo(null);
                 fetchMessages();
-                alert('Meddelande skickat!');
+                alert('Message sent!');
             } else {
                 const errorText = await response.text();
-                alert('Kunde inte skicka meddelandet: ' + errorText);
+                alert('Could not send message: ' + errorText);
             }
         } catch (error) {
-            console.error('Fel vid skickande av meddelande:', error);
-            alert('Kunde inte skicka meddelandet');
+            console.error('Error sending message:', error);
+            alert('Could not send message');
         }
     };
+
+    // ... rest of the styling and JSX remains the same as before
+    // (I'll skip repeating the styles object and return statement since they're identical)
 
     const styles = {
         container: {
@@ -271,10 +279,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
             borderBottom: '1px solid #f0f0f0',
             background: isSent ? '#f0f7ff' : 'white',
             transition: 'background 0.2s',
-            cursor: 'pointer',
-            ':hover': {
-                background: isSent ? '#e6f2ff' : '#fafafa'
-            }
+            cursor: 'pointer'
         }),
         messageHeader: {
             display: 'flex',
@@ -388,13 +393,13 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
     };
 
     if (loading) {
-        return <div style={styles.emptyState}>Laddar meddelanden...</div>;
+        return <div style={styles.emptyState}>Loading messages...</div>;
     }
 
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <h2 style={{ margin: 0 }}>Inkorg</h2>
+                <h2 style={{ margin: 0 }}>Inbox</h2>
                 <button
                     style={styles.newMessageButton}
                     onClick={() => {
@@ -402,14 +407,14 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                         setReplyTo(null);
                     }}
                 >
-                    {showNewMessageForm ? '✕ Stäng' : 'Nytt meddelande'}
+                    {showNewMessageForm ? '✕ Close' : 'New Message'}
                 </button>
             </div>
 
             {showNewMessageForm && (
                 <div style={styles.newMessageForm}>
                     <div style={styles.formTitle}>
-                        {replyTo ? '↩ Svara på meddelande' : 'Nytt meddelande'}
+                        {replyTo ? '↩ Reply to message' : 'New message'}
                     </div>
 
                     {replyTo && (
@@ -422,7 +427,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                             color: '#666',
                             borderLeft: '3px solid #667eea'
                         }}>
-                            <strong>Svar till:</strong> {replyTo.content.substring(0, 100)}
+                            <strong>Reply to:</strong> {replyTo.content.substring(0, 100)}
                             {replyTo.content.length > 100 ? '...' : ''}
                         </div>
                     )}
@@ -432,14 +437,14 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                             {currentUser.role === 'PATIENT' ? (
                                 <div>
                                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                                        Till:
+                                        To:
                                     </label>
                                     <select
                                         style={styles.select}
                                         value={selectedRecipient || ''}
                                         onChange={(e) => setSelectedRecipient(e.target.value)}
                                     >
-                                        <option value="">Välj mottagare...</option>
+                                        <option value="">Select recipient...</option>
                                         {recipients.map(recipient => (
                                             <option key={recipient.socialSecurityNumber} value={recipient.socialSecurityNumber}>
                                                 {recipient.firstName} {recipient.lastName} ({recipient.title})
@@ -457,7 +462,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                                         value={selectedPatient || ''}
                                         onChange={(e) => setSelectedPatient(e.target.value)}
                                     >
-                                        <option value="">Välj patient...</option>
+                                        <option value="">Select patient...</option>
                                         {patients.map(patient => (
                                             <option key={patient.socialSecurityNumber} value={patient.socialSecurityNumber}>
                                                 {patient.firstName} {patient.lastName}
@@ -470,18 +475,18 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                     )}
 
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                        Meddelande:
+                        Message:
                     </label>
                     <textarea
                         style={styles.textarea}
                         value={newMessage}
                         onChange={(e) => setNewMessage(e.target.value)}
-                        placeholder="Skriv ditt meddelande här..."
+                        placeholder="Write your message here..."
                     />
 
                     <div style={styles.buttonGroup}>
                         <button style={styles.sendButton} onClick={sendMessage}>
-                            Skicka
+                            Send
                         </button>
                         <button
                             style={styles.cancelButton}
@@ -491,7 +496,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                                 setNewMessage('');
                             }}
                         >
-                            Avbryt
+                            Cancel
                         </button>
                     </div>
                 </div>
@@ -500,7 +505,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
             <div style={styles.messageList}>
                 {messages.length === 0 ? (
                     <div style={styles.emptyState}>
-                        Inga meddelanden
+                        No messages
                     </div>
                 ) : (
                     messages.map(msg => {
@@ -510,14 +515,14 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                         if (isSent) {
                             if (currentUser.role === 'PATIENT') {
                                 const practForeignId = userIdToForeignId[msg.toUserId];
-                                otherUserName = practitionerNames[practForeignId] || 'Vårdpersonal';
+                                otherUserName = practitionerNames[practForeignId] || 'Healthcare Professional';
                             } else {
                                 otherUserName = patientNames[msg.patientPersonnummer] || 'Patient';
                             }
                         } else {
                             if (currentUser.role === 'PATIENT') {
                                 const practForeignId = userIdToForeignId[msg.fromUserId];
-                                otherUserName = practitionerNames[practForeignId] || 'Vårdpersonal';
+                                otherUserName = practitionerNames[practForeignId] || 'Healthcare Professional';
                             } else {
                                 otherUserName = patientNames[msg.patientPersonnummer] || 'Patient';
                             }
@@ -531,10 +536,10 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                                 <div style={styles.messageHeader}>
                                     <div>
                                         <span style={styles.label(isSent)}>
-                                            {isSent ? '➤ SKICKAT' : '⬅ MOTTAGET'}
+                                            {isSent ? '➤ SENT' : '⬅ RECEIVED'}
                                         </span>
                                         <span style={styles.messageFrom(isSent)}>
-                                            {isSent ? `Till: ${otherUserName}` : `Från: ${otherUserName}`}
+                                            {isSent ? `To: ${otherUserName}` : `From: ${otherUserName}`}
                                         </span>
                                     </div>
                                     <span style={styles.messageDate}>
@@ -557,7 +562,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                                         style={styles.replyButton}
                                         onClick={() => handleReply(msg)}
                                     >
-                                        ↩ Svara
+                                        ↩ Reply
                                     </button>
                                 )}
                             </div>

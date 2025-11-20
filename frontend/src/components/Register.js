@@ -1,7 +1,5 @@
 import React, { useState, useEffect } from 'react';
-
-const API_URL = 'http://localhost:8080/api';
-const AUTH_URL = 'http://localhost:8080/api/v1/auth';
+import API_CONFIG from '../config/api';
 
 function Register({ onRegisterSuccess, onBackToLogin }) {
     const [username, setUsername] = useState('');
@@ -27,29 +25,29 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
 
     const fetchPatients = async () => {
         try {
-            const response = await fetch(`${API_URL}/patients`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
                 const data = await response.json();
                 setPatients(data);
-                console.log('Patienter hämtade från HAPI:', data);
+                console.log('Patients fetched:', data);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av patienter:', error);
-            setError('Kunde inte hämta patienter från servern');
+            console.error('Error fetching patients:', error);
+            setError('Could not fetch patients from server');
         }
     };
 
     const fetchPractitioners = async () => {
         try {
-            const response = await fetch(`${API_URL}/practitioners`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (response.ok) {
                 const data = await response.json();
                 setPractitioners(data);
-                console.log('Practitioners hämtade från HAPI:', data);
+                console.log('Practitioners fetched:', data);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av practitioners:', error);
-            setError('Kunde inte hämta vårdpersonal från servern');
+            console.error('Error fetching practitioners:', error);
+            setError('Could not fetch practitioners from server');
         }
     };
 
@@ -59,16 +57,16 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
         setLoading(true);
 
         if (!foreignId) {
-            setError('Du måste välja en person att koppla kontot till');
+            setError('You must select a person to link the account to');
             setLoading(false);
             return;
         }
 
         const fhirUuid = foreignId;
-        console.log('Skapar användare med FHIR UUID:', fhirUuid);
+        console.log('Creating user with FHIR UUID:', fhirUuid);
 
         try {
-            const userResponse = await fetch(`${AUTH_URL}/register`, {
+            const userResponse = await fetch(`${API_CONFIG.USER_SERVICE}/api/v1/auth/register`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -88,15 +86,15 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
             } else {
                 const errorData = await userResponse.text();
                 if (errorData.includes('already registered')) {
-                    setError('Denna person har redan ett användarkonto. Välj en annan person.');
+                    setError('This person already has a user account. Choose another person.');
                 } else if (errorData.includes('Username taken')) {
-                    setError('Användarnamnet är upptaget. Välj ett annat användarnamn.');
+                    setError('Username is taken. Choose another username.');
                 } else {
-                    setError(errorData || 'Registrering misslyckades');
+                    setError(errorData || 'Registration failed');
                 }
             }
         } catch (err) {
-            setError(err.message || 'Kunde inte ansluta till servern');
+            setError(err.message || 'Could not connect to server');
         } finally {
             setLoading(false);
         }
@@ -113,14 +111,14 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                 maxWidth: '500px',
                 textAlign: 'center'
             }}>
-                <h2 style={{ color: '#4caf50' }}>✓ Registrering lyckades!</h2>
-                <p>Ditt konto har skapats. Du omdirigeras till inloggningssidan...</p>
+                <h2 style={{ color: '#4caf50' }}>✓ Registration successful!</h2>
+                <p>Your account has been created. Redirecting to login page...</p>
             </div>
         );
     }
 
     const availablePersons = role === 'PATIENT' ? patients : practitioners;
-    const personLabel = role === 'PATIENT' ? 'Patient' : 'Vårdpersonal';
+    const personLabel = role === 'PATIENT' ? 'Patient' : 'Healthcare Professional';
 
     return (
         <div style={{
@@ -134,14 +132,14 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
             overflowY: 'auto'
         }}>
             <h2 style={{ textAlign: 'center', marginBottom: '30px', color: '#333' }}>
-                Skapa konto
+                Create Account
             </h2>
 
             <form onSubmit={handleSubmit}>
-                {/* Roll */}
+                {/* Role Selection */}
                 <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                        Användartyp *
+                        User Type *
                     </label>
                     <select
                         value={role}
@@ -159,22 +157,22 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                         }}
                     >
                         <option value="PATIENT">Patient</option>
-                        <option value="DOCTOR">Läkare</option>
-                        <option value="STAFF">Övrig personal</option>
+                        <option value="DOCTOR">Doctor</option>
+                        <option value="STAFF">Staff</option>
                     </select>
                 </div>
 
                 <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
 
-                {/* Välj Patient/Practitioner från HAPI */}
+                {/* Select Patient/Practitioner */}
                 <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                        Välj {personLabel} *
+                        Select {personLabel} *
                     </label>
                     <select
                         value={foreignId}
                         onChange={(e) => {
-                            console.log('Valt value:', e.target.value);
+                            console.log('Selected value:', e.target.value);
                             setForeignId(e.target.value);
                         }}
                         required
@@ -187,7 +185,7 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                             boxSizing: 'border-box'
                         }}
                     >
-                        <option value="">-- Välj {personLabel} --</option>
+                        <option value="">-- Select {personLabel} --</option>
                         {availablePersons.map(person => (
                             <option
                                 key={person.socialSecurityNumber}
@@ -200,19 +198,19 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                     </select>
                     {availablePersons.length === 0 && (
                         <small style={{ color: '#999', fontSize: '12px', marginTop: '5px', display: 'block' }}>
-                            Laddar {personLabel.toLowerCase()}...
+                            Loading {personLabel.toLowerCase()}...
                         </small>
                     )}
                 </div>
 
                 <hr style={{ margin: '30px 0', border: 'none', borderTop: '1px solid #eee' }} />
 
-                <h3 style={{ marginBottom: '20px', fontSize: '18px' }}>Kontoinformation</h3>
+                <h3 style={{ marginBottom: '20px', fontSize: '18px' }}>Account Information</h3>
 
-                {/* Användarnamn */}
+                {/* Username */}
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                        Användarnamn *
+                        Username *
                     </label>
                     <input
                         type="text"
@@ -230,10 +228,10 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                     />
                 </div>
 
-                {/* E-post */}
+                {/* Email */}
                 <div style={{ marginBottom: '15px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                        E-post *
+                        Email *
                     </label>
                     <input
                         type="email"
@@ -251,10 +249,10 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                     />
                 </div>
 
-                {/* Lösenord */}
+                {/* Password */}
                 <div style={{ marginBottom: '20px' }}>
                     <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
-                        Lösenord *
+                        Password *
                     </label>
                     <input
                         type="password"
@@ -272,7 +270,7 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                         }}
                     />
                     <small style={{ color: '#666', fontSize: '12px' }}>
-                        Minst 6 tecken
+                        At least 6 characters
                     </small>
                 </div>
 
@@ -305,7 +303,7 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                         transition: 'background 0.3s'
                     }}
                 >
-                    {loading ? 'Registrerar...' : 'Registrera'}
+                    {loading ? 'Registering...' : 'Register'}
                 </button>
             </form>
 
@@ -321,7 +319,7 @@ function Register({ onRegisterSuccess, onBackToLogin }) {
                         textDecoration: 'underline'
                     }}
                 >
-                    Tillbaka till inloggning
+                    Back to login
                 </button>
             </div>
         </div>

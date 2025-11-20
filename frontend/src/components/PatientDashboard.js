@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import MessagingSystem from './MessagingSystem';
+import API_CONFIG from '../config/api';
 
-const API_URL = 'http://localhost:8080/api';
+const API_URL = API_CONFIG.CLINICAL_SERVICE;
 
 function PatientDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('overview');
@@ -22,7 +23,7 @@ function PatientDashboard({ user, onLogout }) {
         try {
             console.log('Hämtar data för patient med FHIR UUID:', patientId);
 
-            const allPatientsRes = await fetch(`${API_URL}/patients`);
+            const allPatientsRes = await fetch(`${API_URL}/api/patients`);
             if (allPatientsRes.ok) {
                 const allPatients = await allPatientsRes.json();
                 const patient = allPatients.find(p => p.socialSecurityNumber === patientId);
@@ -32,9 +33,9 @@ function PatientDashboard({ user, onLogout }) {
                     console.log('Patient hämtad från HAPI:', patient);
 
                     const [obsRes, condRes, encRes] = await Promise.all([
-                        fetch(`${API_URL}/v1/clinical/observations/patient/${patientId}`),
-                        fetch(`${API_URL}/v1/clinical/conditions/patient/${patientId}`),
-                        fetch(`${API_URL}/v1/clinical/encounters/patient/${patientId}`)
+                        fetch(`${API_URL}/api/v1/clinical/observations/patient/${patientId}`),
+                        fetch(`${API_URL}/api/v1/clinical/conditions/patient/${patientId}`),
+                        fetch(`${API_URL}/api/v1/clinical/encounters/patient/${patientId}`)
                     ]);
 
                     if (obsRes.ok) {
