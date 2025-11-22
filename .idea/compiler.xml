@@ -24,6 +24,12 @@
         <module name="message-service" />
         <module name="user-service" />
       </profile>
+      <profile name="Maven default annotation processors profile" enabled="true">
+        <sourceOutputDir name="target/generated-sources/annotations" />
+        <sourceTestOutputDir name="target/generated-test-sources/test-annotations" />
+        <outputRelativeToContentRoot value="true" />
+        <module name="search-service" />
+      </profile>
     </annotationProcessing>
   </component>
   <component name="JavacSettings">
@@ -31,6 +37,7 @@
       <module name="PatientSystem" options="-parameters" />
       <module name="clinical-service" options="-parameters" />
       <module name="message-service" options="-parameters" />
+      <module name="search-service" options="-parameters" />
       <module name="user-service" options="-parameters" />
     </option>
   </component>
