@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import MessagingSystem from './MessagingSystem';
+import ImageGallery from './ImageGallery';
 import API_CONFIG from '../config/api';
-
-const API_URL = API_CONFIG.CLINICAL_SERVICE;
 
 function PatientDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('overview');
@@ -21,55 +20,55 @@ function PatientDashboard({ user, onLogout }) {
     const fetchPatientData = async () => {
         setLoading(true);
         try {
-            console.log('Hämtar data för patient med FHIR UUID:', patientId);
+            console.log('Fetching data for patient with FHIR UUID:', patientId);
 
-            const allPatientsRes = await fetch(`${API_URL}/api/patients`);
+            const allPatientsRes = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (allPatientsRes.ok) {
                 const allPatients = await allPatientsRes.json();
                 const patient = allPatients.find(p => p.socialSecurityNumber === patientId);
 
                 if (patient) {
                     setPatientInfo(patient);
-                    console.log('Patient hämtad från HAPI:', patient);
+                    console.log('Patient fetched from HAPI:', patient);
 
                     const [obsRes, condRes, encRes] = await Promise.all([
-                        fetch(`${API_URL}/api/v1/clinical/observations/patient/${patientId}`),
-                        fetch(`${API_URL}/api/v1/clinical/conditions/patient/${patientId}`),
-                        fetch(`${API_URL}/api/v1/clinical/encounters/patient/${patientId}`)
+                        fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientId}`),
+                        fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientId}`),
+                        fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientId}`)
                     ]);
 
                     if (obsRes.ok) {
                         const obs = await obsRes.json();
                         setObservations(obs);
-                        console.log('Observations hämtade:', obs.length);
+                        console.log('Observations fetched:', obs.length);
                     } else {
-                        console.error('Kunde inte hämta observations, status:', obsRes.status);
+                        console.error('Could not fetch observations, status:', obsRes.status);
                     }
 
                     if (condRes.ok) {
                         const cond = await condRes.json();
                         setConditions(cond);
-                        console.log('Conditions hämtade:', cond.length);
+                        console.log('Conditions fetched:', cond.length);
                     } else {
-                        console.error('Kunde inte hämta conditions, status:', condRes.status);
+                        console.error('Could not fetch conditions, status:', condRes.status);
                     }
 
                     if (encRes.ok) {
                         const enc = await encRes.json();
                         setEncounters(enc);
-                        console.log('Encounters hämtade:', enc.length);
+                        console.log('Encounters fetched:', enc.length);
                     } else {
-                        console.error('Kunde inte hämta encounters, status:', encRes.status);
+                        console.error('Could not fetch encounters, status:', encRes.status);
                     }
                 } else {
-                    console.error('Kunde inte hitta patient med UUID:', patientId);
+                    console.error('Could not find patient with UUID:', patientId);
                 }
             } else {
-                console.error('Kunde inte hämta patienter, status:', allPatientsRes.status);
+                console.error('Could not fetch patients, status:', allPatientsRes.status);
             }
 
         } catch (error) {
-            console.error('Fel vid hämtning av patientdata:', error);
+            console.error('Error fetching patient data:', error);
         } finally {
             setLoading(false);
         }
@@ -129,9 +128,9 @@ function PatientDashboard({ user, onLogout }) {
         <div style={styles.container}>
             <header style={styles.header}>
                 <div>
-                    <h1 style={{ margin: 0 }}>Min Journal</h1>
+                    <h1 style={{ margin: 0 }}>My Journal</h1>
                     <p style={{ margin: '5px 0 0 0', opacity: 0.9 }}>
-                        Inloggad som: {user.username}
+                        Logged in as: {user.username}
                     </p>
                 </div>
                 <button
@@ -145,7 +144,7 @@ function PatientDashboard({ user, onLogout }) {
                         cursor: 'pointer'
                     }}
                 >
-                    Logga ut
+                    Log out
                 </button>
             </header>
 
@@ -154,54 +153,60 @@ function PatientDashboard({ user, onLogout }) {
                     style={styles.navButton(activeTab === 'overview')}
                     onClick={() => setActiveTab('overview')}
                 >
-                    Översikt
+                    Overview
                 </button>
                 <button
                     style={styles.navButton(activeTab === 'observations')}
                     onClick={() => setActiveTab('observations')}
                 >
-                    Observationer
+                    Observations
                 </button>
                 <button
                     style={styles.navButton(activeTab === 'conditions')}
                     onClick={() => setActiveTab('conditions')}
                 >
-                    Diagnoser
+                    Diagnoses
                 </button>
                 <button
                     style={styles.navButton(activeTab === 'encounters')}
                     onClick={() => setActiveTab('encounters')}
                 >
-                    Besök
+                    Visits
                 </button>
                 <button
                     style={styles.navButton(activeTab === 'messages')}
                     onClick={() => setActiveTab('messages')}
                 >
-                    Meddelanden
+                    Messages
+                </button>
+                <button
+                    style={styles.navButton(activeTab === 'images')}
+                    onClick={() => setActiveTab('images')}
+                >
+                    Images
                 </button>
             </nav>
 
             <div style={styles.content}>
                 {loading ? (
                     <div style={styles.card}>
-                        <p>Laddar...</p>
+                        <p>Loading...</p>
                     </div>
                 ) : (
                     <>
                         {activeTab === 'overview' && patientInfo && (
                             <div style={styles.card}>
-                                <h2 style={{ marginBottom: '30px' }}>Min Information</h2>
+                                <h2 style={{ marginBottom: '30px' }}>My Information</h2>
                                 <div style={styles.infoRow}>
-                                    <strong>Namn:</strong>
+                                    <strong>Name:</strong>
                                     <span>{patientInfo.firstName} {patientInfo.lastName}</span>
                                 </div>
                                 <div style={styles.infoRow}>
-                                    <strong>Personnummer:</strong>
+                                    <strong>Personal ID Number:</strong>
                                     <span>{patientInfo.socialSecurityNumber}</span>
                                 </div>
                                 <div style={styles.infoRow}>
-                                    <strong>Födelsedatum:</strong>
+                                    <strong>Date of Birth:</strong>
                                     <span>{patientInfo.dateOfBirth}</span>
                                 </div>
                             </div>
@@ -209,15 +214,15 @@ function PatientDashboard({ user, onLogout }) {
 
                         {activeTab === 'observations' && (
                             <div style={styles.card}>
-                                <h2>Mina Observationer</h2>
+                                <h2>My Observations</h2>
                                 {observations.length === 0 ? (
-                                    <p>Inga observationer registrerade</p>
+                                    <p>No observations registered</p>
                                 ) : (
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                         <tr>
-                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Datum</th>
-                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Beskrivning</th>
+                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Date</th>
+                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Description</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -237,15 +242,15 @@ function PatientDashboard({ user, onLogout }) {
 
                         {activeTab === 'conditions' && (
                             <div style={styles.card}>
-                                <h2>Mina Diagnoser</h2>
+                                <h2>My Diagnoses</h2>
                                 {conditions.length === 0 ? (
-                                    <p>Inga diagnoser registrerade</p>
+                                    <p>No diagnoses registered</p>
                                 ) : (
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                         <tr>
-                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Datum</th>
-                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Beskrivning</th>
+                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Date</th>
+                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Description</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -265,15 +270,15 @@ function PatientDashboard({ user, onLogout }) {
 
                         {activeTab === 'encounters' && (
                             <div style={styles.card}>
-                                <h2>Mina Besök</h2>
+                                <h2>My Visits</h2>
                                 {encounters.length === 0 ? (
-                                    <p>Inga besök registrerade</p>
+                                    <p>No visits registered</p>
                                 ) : (
                                     <table style={{ width: '100%', borderCollapse: 'collapse' }}>
                                         <thead>
                                         <tr>
-                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Starttid</th>
-                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Sluttid</th>
+                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>Start Time</th>
+                                            <th style={{ textAlign: 'left', padding: '10px', borderBottom: '2px solid #ddd' }}>End Time</th>
                                         </tr>
                                         </thead>
                                         <tbody>
@@ -283,7 +288,7 @@ function PatientDashboard({ user, onLogout }) {
                                                     {new Date(enc.startTime).toLocaleString()}
                                                 </td>
                                                 <td style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
-                                                    {enc.endTime ? new Date(enc.endTime).toLocaleString() : 'Pågående'}
+                                                    {enc.endTime ? new Date(enc.endTime).toLocaleString() : 'Ongoing'}
                                                 </td>
                                             </tr>
                                         ))}
@@ -294,10 +299,11 @@ function PatientDashboard({ user, onLogout }) {
                         )}
 
                         {activeTab === 'messages' && (
-                            <div style={styles.card}>
-                                <h2>Meddelanden</h2>
-                                <MessagingSystem currentUser={user} patientPersonnummer={patientId} />
-                            </div>
+                            <MessagingSystem currentUser={user} patientPersonnummer={patientId} />
+                        )}
+
+                        {activeTab === 'images' && (
+                            <ImageGallery currentUser={user} patientPersonnummer={patientId} />
                         )}
                     </>
                 )}

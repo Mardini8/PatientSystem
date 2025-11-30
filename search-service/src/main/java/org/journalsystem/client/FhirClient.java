@@ -1,34 +1,42 @@
 package org.journalsystem.client;
 
-import jakarta.ws.rs.GET;
-import jakarta.ws.rs.Path;
-import jakarta.ws.rs.PathParam;
-import jakarta.ws.rs.QueryParam;
+import jakarta.ws.rs.*;
+import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
+import org.journalsystem.dto.fhir.FhirBundle;
 
 @RegisterRestClient(configKey = "fhir-api")
+@Produces(MediaType.APPLICATION_JSON)
 public interface FhirClient {
 
     @GET
     @Path("/Patient")
-    String searchPatients(@QueryParam("name") String name);
+    FhirBundle searchPatients(@QueryParam("name") String name);
 
     @GET
     @Path("/Patient/{id}")
-    String getPatient(@PathParam("id") String id);
+    FhirBundle.FhirResource getPatient(@PathParam("id") String id);
 
     @GET
     @Path("/Condition")
-    String searchConditions(@QueryParam("code:text") String conditionText);
+    FhirBundle searchConditions(@QueryParam("code:text") String conditionText);
+
+    @GET
+    @Path("/Condition")
+    FhirBundle getConditionsForPatient(@QueryParam("subject") String patientId);
 
     @GET
     @Path("/Practitioner/{id}")
-    String getPractitioner(@PathParam("id") String id);
+    FhirBundle.FhirResource getPractitioner(@PathParam("id") String id);
 
     @GET
     @Path("/Encounter")
-    String searchEncounters(
+    FhirBundle searchEncounters(
             @QueryParam("practitioner") String practitionerId,
             @QueryParam("date") String date
     );
+
+    @GET
+    @Path("/Encounter")
+    FhirBundle getEncountersForPractitioner(@QueryParam("participant") String practitionerId);
 }

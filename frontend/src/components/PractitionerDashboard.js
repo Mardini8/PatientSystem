@@ -1,8 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import MessagingSystem from './MessagingSystem';
+import ImageGallery from './ImageGallery';
+import SearchPanel from './SearchPanel';
 import API_CONFIG from '../config/api';
-
-const API_URL = API_CONFIG.CLINICAL_SERVICE;
 
 function PractitionerDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('patients');
@@ -21,13 +21,13 @@ function PractitionerDashboard({ user, onLogout }) {
     const fetchPatients = async () => {
         setLoading(true);
         try {
-            const response = await fetch(`${API_URL}/api/patients`);
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
                 const data = await response.json();
                 setPatients(data);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av patienter:', error);
+            console.error('Error fetching patients:', error);
         } finally {
             setLoading(false);
         }
@@ -112,7 +112,7 @@ function PractitionerDashboard({ user, onLogout }) {
                 <div>
                     <h1 style={{ margin: 0 }}>PatientSystem</h1>
                     <p style={{ margin: '5px 0 0 0', opacity: 0.9 }}>
-                        Inloggad som: {user.username} ({isDoctor ? 'Läkare' : 'Personal'})
+                        Logged in as: {user.username} ({isDoctor ? 'Doctor' : 'Staff'})
                     </p>
                 </div>
                 <button
@@ -126,7 +126,7 @@ function PractitionerDashboard({ user, onLogout }) {
                         cursor: 'pointer'
                     }}
                 >
-                    Logga ut
+                    Log out
                 </button>
             </header>
 
@@ -135,35 +135,41 @@ function PractitionerDashboard({ user, onLogout }) {
                     style={styles.navButton(activeTab === 'patients')}
                     onClick={() => setActiveTab('patients')}
                 >
-                    Patienter
+                    Patients
+                </button>
+                <button
+                    style={styles.navButton(activeTab === 'search')}
+                    onClick={() => setActiveTab('search')}
+                >
+                    Search
                 </button>
                 <button
                     style={styles.navButton(activeTab === 'messages')}
                     onClick={() => setActiveTab('messages')}
                 >
-                    Meddelanden
+                    Messages
                 </button>
             </nav>
 
             <div style={styles.content}>
                 {activeTab === 'patients' && (
                     <div style={styles.card}>
-                        <h2>Patientlista</h2>
+                        <h2>Patient List</h2>
                         {!isDoctor && (
                             <p style={{ color: '#666', fontSize: '14px', marginBottom: '20px' }}>
-                                Som personal kan du registrera klinisk data för patienter
+                                As staff, you can register clinical data for patients
                             </p>
                         )}
                         {loading ? (
-                            <p>Laddar patienter...</p>
+                            <p>Loading patients...</p>
                         ) : (
                             <table style={styles.table}>
                                 <thead>
                                 <tr>
-                                    <th style={styles.th}>Förnamn</th>
-                                    <th style={styles.th}>Efternamn</th>
-                                    <th style={styles.th}>Personnummer</th>
-                                    <th style={styles.th}>Åtgärder</th>
+                                    <th style={styles.th}>First Name</th>
+                                    <th style={styles.th}>Last Name</th>
+                                    <th style={styles.th}>Personal ID Number</th>
+                                    <th style={styles.th}>Actions</th>
                                 </tr>
                                 </thead>
                                 <tbody>
@@ -177,7 +183,7 @@ function PractitionerDashboard({ user, onLogout }) {
                                                 style={styles.button}
                                                 onClick={() => viewPatientDetails(patient)}
                                             >
-                                                {isDoctor ? 'Visa detaljer' : 'Registrera data'}
+                                                {isDoctor ? 'View Details' : 'Register Data'}
                                             </button>
                                         </td>
                                     </tr>
@@ -189,19 +195,35 @@ function PractitionerDashboard({ user, onLogout }) {
                 )}
 
                 {activeTab === 'patient-details' && selectedPatient && (
-                    <PatientDetails
-                        patient={selectedPatient}
-                        practitionerPersonnummer={user.foreignId}
-                        isDoctor={isDoctor}
-                        onBack={() => setActiveTab('patients')}
-                    />
+                    <>
+                        <PatientDetails
+                            patient={selectedPatient}
+                            practitionerPersonnummer={user.foreignId}
+                            isDoctor={isDoctor}
+                            onBack={() => setActiveTab('patients')}
+                        />
+
+                        {/* Images section - Only for Doctors */}
+                        {isDoctor && (
+                            <div style={{ marginTop: '30px' }}>
+                                <div style={styles.card}>
+                                    <h2>Images for {selectedPatient.firstName} {selectedPatient.lastName}</h2>
+                                </div>
+                                <ImageGallery
+                                    currentUser={user}
+                                    patientPersonnummer={selectedPatient.socialSecurityNumber}
+                                />
+                            </div>
+                        )}
+                    </>
+                )}
+
+                {activeTab === 'search' && (
+                    <SearchPanel currentUser={user} />
                 )}
 
                 {activeTab === 'messages' && (
-                    <div style={styles.card}>
-                        <h2>Meddelanden</h2>
-                        <MessagingSystem currentUser={user} patientPersonnummer={null} />
-                    </div>
+                    <MessagingSystem currentUser={user} patientPersonnummer={null} />
                 )}
             </div>
         </div>
@@ -242,9 +264,9 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
             const patientPersonnummer = patient.socialSecurityNumber;
 
             const [obsRes, condRes, encRes] = await Promise.all([
-                fetch(`${API_URL}/api/v1/clinical/observations/patient/${patientPersonnummer}`),
-                fetch(`${API_URL}/api/v1/clinical/conditions/patient/${patientPersonnummer}`),
-                fetch(`${API_URL}/api/v1/clinical/encounters/patient/${patientPersonnummer}`)
+                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientPersonnummer}`),
+                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientPersonnummer}`),
+                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientPersonnummer}`)
             ]);
 
             if (obsRes.ok) {
@@ -260,14 +282,14 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                 setEncounters(enc);
             }
         } catch (error) {
-            console.error('Fel vid hämtning av patientdata:', error);
+            console.error('Error fetching patient data:', error);
         }
     };
 
     const handleAddObservation = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_URL}/api/v1/clinical/observations`, {
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -281,7 +303,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
             });
 
             if (response.ok) {
-                alert('Observation skapad i HAPI FHIR!');
+                alert('Observation created in HAPI FHIR!');
                 setShowAddObservation(false);
                 setNewObservation({
                     description: '',
@@ -292,19 +314,19 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                 fetchPatientData();
             } else {
                 const errorText = await response.text();
-                console.error('Fel från server:', errorText);
-                alert('Fel vid skapande av observation: ' + errorText);
+                console.error('Error from server:', errorText);
+                alert('Error creating observation: ' + errorText);
             }
         } catch (error) {
-            console.error('Fel vid skapande av observation:', error);
-            alert('Kunde inte skapa observation: ' + error.message);
+            console.error('Error creating observation:', error);
+            alert('Could not create observation: ' + error.message);
         }
     };
 
     const handleAddCondition = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_URL}/api/v1/clinical/conditions`, {
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -316,7 +338,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
             });
 
             if (response.ok) {
-                alert('Diagnos skapad i HAPI FHIR!');
+                alert('Diagnosis created in HAPI FHIR!');
                 setShowAddCondition(false);
                 setNewCondition({
                     description: '',
@@ -325,19 +347,19 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                 fetchPatientData();
             } else {
                 const errorText = await response.text();
-                console.error('Fel från server:', errorText);
-                alert('Fel vid skapande av diagnos: ' + errorText);
+                console.error('Error from server:', errorText);
+                alert('Error creating diagnosis: ' + errorText);
             }
         } catch (error) {
-            console.error('Fel vid skapande av diagnos:', error);
-            alert('Kunde inte skapa diagnos: ' + error.message);
+            console.error('Error creating diagnosis:', error);
+            alert('Could not create diagnosis: ' + error.message);
         }
     };
 
     const handleAddEncounter = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_URL}/api/v1/clinical/encounters`, {
+            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters`, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
@@ -349,7 +371,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
             });
 
             if (response.ok) {
-                alert('Besök skapat i HAPI FHIR!');
+                alert('Visit created in HAPI FHIR!');
                 setShowAddEncounter(false);
                 setNewEncounter({
                     startTime: new Date().toISOString().slice(0, 16),
@@ -358,12 +380,12 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                 fetchPatientData();
             } else {
                 const errorText = await response.text();
-                console.error('Fel från server:', errorText);
-                alert('Fel vid skapande av besök: ' + errorText);
+                console.error('Error from server:', errorText);
+                alert('Error creating visit: ' + errorText);
             }
         } catch (error) {
-            console.error('Fel vid skapande av besök:', error);
-            alert('Kunde inte skapa besök: ' + error.message);
+            console.error('Error creating visit:', error);
+            alert('Could not create visit: ' + error.message);
         }
     };
 
@@ -408,57 +430,57 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
 
     return (
         <div>
-            <button style={styles.button} onClick={onBack}>← Tillbaka</button>
+            <button style={styles.button} onClick={onBack}>← Back</button>
 
             <div style={styles.card}>
-                <h2>Patientinformation {isDoctor ? '(Fullständig åtkomst som läkare)' : '(Personal - begränsad åtkomst)'}</h2>
-                <p><strong>Namn:</strong> {patient.firstName} {patient.lastName}</p>
-                <p><strong>Personnummer:</strong> {patient.socialSecurityNumber}</p>
-                <p><strong>Födelsedatum:</strong> {patient.dateOfBirth}</p>
+                <h2>Patient Information {isDoctor ? '(Full access as doctor)' : '(Staff - limited access)'}</h2>
+                <p><strong>Name:</strong> {patient.firstName} {patient.lastName}</p>
+                <p><strong>Personal ID Number:</strong> {patient.socialSecurityNumber}</p>
+                <p><strong>Date of Birth:</strong> {patient.dateOfBirth}</p>
             </div>
 
-            {/* OBSERVATIONER */}
+            {/* OBSERVATIONS */}
             <div style={styles.card}>
-                <h3>Observationer</h3>
+                <h3>Observations</h3>
                 <button style={styles.button} onClick={() => setShowAddObservation(!showAddObservation)}>
-                    {showAddObservation ? 'Avbryt' : '+ Lägg till observation'}
+                    {showAddObservation ? 'Cancel' : '+ Add observation'}
                 </button>
 
                 {showAddObservation && (
                     <form onSubmit={handleAddObservation} style={{ marginTop: '20px', padding: '20px', background: '#f9f9f9', borderRadius: '8px' }}>
-                        <h4>Ny observation</h4>
+                        <h4>New observation</h4>
                         <label>
-                            Beskrivning:
+                            Description:
                             <textarea
                                 style={styles.textarea}
                                 value={newObservation.description}
                                 onChange={(e) => setNewObservation({...newObservation, description: e.target.value})}
-                                placeholder="Beskriv observationen"
+                                placeholder="Describe the observation"
                                 required
                             />
                         </label>
                         <label>
-                            Värde (valfritt):
+                            Value (optional):
                             <input
                                 type="text"
                                 style={styles.input}
                                 value={newObservation.value}
                                 onChange={(e) => setNewObservation({...newObservation, value: e.target.value})}
-                                placeholder="T.ex. 120"
+                                placeholder="E.g. 120"
                             />
                         </label>
                         <label>
-                            Enhet (valfritt):
+                            Unit (optional):
                             <input
                                 type="text"
                                 style={styles.input}
                                 value={newObservation.unit}
                                 onChange={(e) => setNewObservation({...newObservation, unit: e.target.value})}
-                                placeholder="T.ex. mmHg"
+                                placeholder="E.g. mmHg"
                             />
                         </label>
                         <label>
-                            Datum:
+                            Date:
                             <input
                                 type="date"
                                 style={styles.input}
@@ -467,15 +489,15 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                                 required
                             />
                         </label>
-                        <button type="submit" style={styles.button}>Spara observation</button>
+                        <button type="submit" style={styles.button}>Save observation</button>
                     </form>
                 )}
 
-                {/* VIKTIGT: LÄKARE ser listan, PERSONAL ser den INTE */}
+                {/* Doctors see the list, Staff do NOT */}
                 {isDoctor && (
                     <>
                         {observations.length === 0 ? (
-                            <p>Inga observationer registrerade</p>
+                            <p>No observations registered</p>
                         ) : (
                             <ul>
                                 {observations.map(obs => (
@@ -492,28 +514,28 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                 )}
             </div>
 
-            {/* DIAGNOSER */}
+            {/* CONDITIONS */}
             <div style={styles.card}>
-                <h3>Diagnoser</h3>
+                <h3>Diagnoses</h3>
                 <button style={styles.button} onClick={() => setShowAddCondition(!showAddCondition)}>
-                    {showAddCondition ? 'Avbryt' : '+ Lägg till diagnos'}
+                    {showAddCondition ? 'Cancel' : '+ Add diagnosis'}
                 </button>
 
                 {showAddCondition && (
                     <form onSubmit={handleAddCondition} style={{ marginTop: '20px', padding: '20px', background: '#f9f9f9', borderRadius: '8px' }}>
-                        <h4>Ny diagnos</h4>
+                        <h4>New diagnosis</h4>
                         <label>
-                            Beskrivning:
+                            Description:
                             <textarea
                                 style={styles.textarea}
                                 value={newCondition.description}
                                 onChange={(e) => setNewCondition({...newCondition, description: e.target.value})}
-                                placeholder="Beskriv diagnosen"
+                                placeholder="Describe the diagnosis"
                                 required
                             />
                         </label>
                         <label>
-                            Datum:
+                            Date:
                             <input
                                 type="date"
                                 style={styles.input}
@@ -522,15 +544,15 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                                 required
                             />
                         </label>
-                        <button type="submit" style={styles.button}>Spara diagnos</button>
+                        <button type="submit" style={styles.button}>Save diagnosis</button>
                     </form>
                 )}
 
-                {/* VIKTIGT: LÄKARE ser listan, PERSONAL ser den INTE */}
+                {/* Doctors see the list, Staff do NOT */}
                 {isDoctor && (
                     <>
                         {conditions.length === 0 ? (
-                            <p>Inga diagnoser registrerade</p>
+                            <p>No diagnoses registered</p>
                         ) : (
                             <ul>
                                 {conditions.map(cond => (
@@ -547,18 +569,18 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                 )}
             </div>
 
-            {/* BESÖK - Både läkare och personal kan se och skapa */}
+            {/* ENCOUNTERS - Both doctors and staff can see and create */}
             <div style={styles.card}>
-                <h3>Besök</h3>
+                <h3>Visits</h3>
                 <button style={styles.button} onClick={() => setShowAddEncounter(!showAddEncounter)}>
-                    {showAddEncounter ? 'Avbryt' : '+ Registrera besök'}
+                    {showAddEncounter ? 'Cancel' : '+ Register visit'}
                 </button>
 
                 {showAddEncounter && (
                     <form onSubmit={handleAddEncounter} style={{ marginTop: '20px', padding: '20px', background: '#f9f9f9', borderRadius: '8px' }}>
-                        <h4>Nytt besök</h4>
+                        <h4>New visit</h4>
                         <label>
-                            Starttid:
+                            Start time:
                             <input
                                 type="datetime-local"
                                 style={styles.input}
@@ -568,7 +590,7 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                             />
                         </label>
                         <label>
-                            Sluttid (valfritt):
+                            End time (optional):
                             <input
                                 type="datetime-local"
                                 style={styles.input}
@@ -576,18 +598,18 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
                                 onChange={(e) => setNewEncounter({...newEncounter, endTime: e.target.value})}
                             />
                         </label>
-                        <button type="submit" style={styles.button}>Spara besök</button>
+                        <button type="submit" style={styles.button}>Save visit</button>
                     </form>
                 )}
 
-                {/* Både läkare och personal ser besök-listan */}
+                {/* Both doctors and staff see the visit list */}
                 {encounters.length === 0 ? (
-                    <p>Inga besök registrerade</p>
+                    <p>No visits registered</p>
                 ) : (
                     <ul>
                         {encounters.map(enc => (
                             <li key={enc.id} style={{ padding: '10px 0', borderBottom: '1px solid #eee' }}>
-                                Besök: {new Date(enc.startTime).toLocaleString()}
+                                Visit: {new Date(enc.startTime).toLocaleString()}
                                 {enc.endTime && ` - ${new Date(enc.endTime).toLocaleString()}`}
                             </li>
                         ))}

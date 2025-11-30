@@ -1,5 +1,6 @@
 const multer = require('multer');
 const path = require('path');
+const { v4: uuidv4 } = require('uuid');
 
 // Configure storage
 const storage = multer.diskStorage({
@@ -7,8 +8,10 @@ const storage = multer.diskStorage({
         cb(null, process.env.UPLOAD_DIR || './uploads');
     },
     filename: function (req, file, cb) {
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, 'image-' + uniqueSuffix + path.extname(file.originalname));
+        // Generate unique ID and preserve extension
+        const uniqueId = uuidv4();
+        const ext = path.extname(file.originalname);
+        cb(null, `${uniqueId}${ext}`);
     }
 });
 
@@ -19,7 +22,7 @@ const fileFilter = (req, file, cb) => {
     if (allowedTypes.includes(file.mimetype)) {
         cb(null, true);
     } else {
-        cb(new Error('Invalid file type. Only JPEG, PNG allowed.'), false);
+        cb(new Error('Invalid file type. Only JPEG, PNG, JPG allowed.'), false);
     }
 };
 
@@ -27,7 +30,7 @@ const fileFilter = (req, file, cb) => {
 const upload = multer({
     storage: storage,
     limits: {
-        fileSize: parseInt(process.env.MAX_FILE_SIZE || 5242880) // 5MB default
+        fileSize: parseInt(process.env.MAX_FILE_SIZE || 10485760) // 10MB default
     },
     fileFilter: fileFilter
 });

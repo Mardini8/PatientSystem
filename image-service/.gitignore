@@ -1,6 +1,8 @@
 node_modules/
 uploads/*
 !uploads/.gitkeep
+database/*.db
+database/*.db-journal
 .env
 npm-debug.log
 .DS_Store
