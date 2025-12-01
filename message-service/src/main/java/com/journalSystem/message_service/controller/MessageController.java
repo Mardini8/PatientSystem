@@ -12,7 +12,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/messages")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"http://localhost:30000", "http://localhost:3000"})
 @RequiredArgsConstructor
 public class MessageController {
     private final MessageService service;

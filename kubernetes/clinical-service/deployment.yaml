@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: clinical-service
+  namespace: patientsystem
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: clinical-service
+  template:
+    metadata:
+      labels:
+        app: clinical-service
+    spec:
+      containers:
+      - name: clinical-service
+        image: clinical-service:latest
+        imagePullPolicy: Never  # För lokala images i Docker Desktop
+        ports:
+        - containerPort: 8082
+          name: http
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "prod"
+        # Lägg till andra miljövariabler här om behövs

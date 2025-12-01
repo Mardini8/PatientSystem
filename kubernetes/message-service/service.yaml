@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: message-service
+  namespace: patientsystem
+spec:
+  selector:
+    app: message-service
+  ports:
+  - protocol: TCP
+    port: 8083
+    targetPort: 8083
+  type: ClusterIP

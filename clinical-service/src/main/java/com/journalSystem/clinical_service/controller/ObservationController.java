@@ -13,7 +13,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/v1/clinical/observations")
-@CrossOrigin(origins = "http://localhost:3000")
+@CrossOrigin(origins = {"http://localhost:30000", "http://localhost:3000"})
 @RequiredArgsConstructor
 public class ObservationController {
 

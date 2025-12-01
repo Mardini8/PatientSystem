@@ -1,9 +1,8 @@
 const API_CONFIG = {
-    USER_SERVICE: 'http://localhost:8081',
-    CLINICAL_SERVICE: 'http://localhost:8082',
-    MESSAGE_SERVICE: 'http://localhost:8083',
-    IMAGE_SERVICE: 'http://localhost:3001',
-    SEARCH_SERVICE: 'http://localhost:8084'
+    USER_SERVICE: 'http://localhost:30081',
+    CLINICAL_SERVICE: 'http://localhost:30082',
+    MESSAGE_SERVICE: 'http://localhost:30083',
+    IMAGE_SERVICE: 'http://localhost:30001',
+    SEARCH_SERVICE: 'http://localhost:30084'
 };
-
 export default API_CONFIG;

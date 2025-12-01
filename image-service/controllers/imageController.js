@@ -14,7 +14,6 @@ exports.uploadImage = async (req, res) => {
         const { patientPersonnummer, userId, username, description, tags } = req.body;
 
         if (!patientPersonnummer) {
-            // Delete uploaded file if patient info missing
             await fs.unlink(req.file.path);
             return res.status(400).json({ error: 'Patient personnummer is required' });
         }
@@ -27,16 +26,16 @@ exports.uploadImage = async (req, res) => {
         // Generate unique ID for the image
         const imageId = path.parse(req.file.filename).name;
 
-        // Save to database
+        // Save to database using MySQL
         const sql = `
             INSERT INTO images (
-                id, filename, original_filename, path, 
+                id, filename, original_filename, path,
                 patient_personnummer, uploaded_by_user_id, uploaded_by_username,
                 upload_date, file_size, mime_type, description, tags
             ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
         `;
 
-        db.run(sql, [
+        await db.query(sql, [
             imageId,
             req.file.filename,
             req.file.originalname,
@@ -44,28 +43,23 @@ exports.uploadImage = async (req, res) => {
             patientPersonnummer,
             userId,
             username || 'Unknown',
-            new Date().toISOString(),
+            new Date(),
             req.file.size,
             req.file.mimetype,
             description || null,
             tags || null
-        ], function(err) {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to save image metadata' });
-            }
+        ]);
 
-            res.status(201).json({
-                message: 'Image uploaded successfully',
-                image: {
-                    id: imageId,
-                    filename: req.file.filename,
-                    patientPersonnummer: patientPersonnummer,
-                    uploadedBy: username,
-                    uploadDate: new Date().toISOString(),
-                    url: `/api/images/${req.file.filename}`
-                }
-            });
+        res.status(201).json({
+            message: 'Image uploaded successfully',
+            image: {
+                id: imageId,
+                filename: req.file.filename,
+                patientPersonnummer: patientPersonnummer,
+                uploadedBy: username,
+                uploadDate: new Date().toISOString(),
+                url: `/api/images/${req.file.filename}`
+            }
         });
     } catch (error) {
         console.error('Upload error:', error);
@@ -92,33 +86,28 @@ exports.getPatientImages = async (req, res) => {
         const { patientPersonnummer } = req.params;
 
         const sql = `
-            SELECT * FROM images 
-            WHERE patient_personnummer = ? 
+            SELECT * FROM images
+            WHERE patient_personnummer = ?
             ORDER BY upload_date DESC
         `;
 
-        db.all(sql, [patientPersonnummer], (err, rows) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to fetch images' });
-            }
+        const [rows] = await db.query(sql, [patientPersonnummer]);
 
-            const images = rows.map(row => ({
-                id: row.id,
-                filename: row.filename,
-                originalFilename: row.original_filename,
-                patientPersonnummer: row.patient_personnummer,
-                uploadedBy: row.uploaded_by_username,
-                uploadDate: row.upload_date,
-                description: row.description,
-                tags: row.tags,
-                isEdited: row.is_edited === 1,
-                url: `/api/images/${row.filename}`,
-                thumbnailUrl: `/api/images/${row.filename}?thumbnail=true`
-            }));
+        const images = rows.map(row => ({
+            id: row.id,
+            filename: row.filename,
+            originalFilename: row.original_filename,
+            patientPersonnummer: row.patient_personnummer,
+            uploadedBy: row.uploaded_by_username,
+            uploadDate: row.upload_date,
+            description: row.description,
+            tags: row.tags,
+            isEdited: row.is_edited === 1,
+            url: `/api/images/${row.filename}`,
+            thumbnailUrl: `/api/images/${row.filename}?thumbnail=true`
+        }));
 
-            res.json({ images });
-        });
+        res.json({ images });
     } catch (error) {
         console.error('Error fetching patient images:', error);
         res.status(500).json({ error: 'Failed to fetch images' });
@@ -131,31 +120,26 @@ exports.getImageMetadata = async (req, res) => {
         const { imageId } = req.params;
 
         const sql = `SELECT * FROM images WHERE id = ?`;
+        const [rows] = await db.query(sql, [imageId]);
 
-        db.get(sql, [imageId], (err, row) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to fetch metadata' });
-            }
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Image not found' });
+        }
 
-            if (!row) {
-                return res.status(404).json({ error: 'Image not found' });
-            }
-
-            res.json({
-                id: row.id,
-                filename: row.filename,
-                originalFilename: row.original_filename,
-                patientPersonnummer: row.patient_personnummer,
-                uploadedBy: row.uploaded_by_username,
-                uploadDate: row.upload_date,
-                fileSize: row.file_size,
-                mimeType: row.mime_type,
-                description: row.description,
-                tags: row.tags,
-                isEdited: row.is_edited === 1,
-                parentImageId: row.parent_image_id
-            });
+        const row = rows[0];
+        res.json({
+            id: row.id,
+            filename: row.filename,
+            originalFilename: row.original_filename,
+            patientPersonnummer: row.patient_personnummer,
+            uploadedBy: row.uploaded_by_username,
+            uploadDate: row.upload_date,
+            fileSize: row.file_size,
+            mimeType: row.mime_type,
+            description: row.description,
+            tags: row.tags,
+            isEdited: row.is_edited === 1,
+            parentImageId: row.parent_image_id
         });
     } catch (error) {
         console.error('Error fetching metadata:', error);
@@ -200,63 +184,59 @@ exports.addText = async (req, res) => {
 
         // Get original image metadata
         const imageId = path.parse(filename).name;
+        const [originalRows] = await db.query('SELECT * FROM images WHERE id = ?', [imageId]);
 
-        db.get('SELECT * FROM images WHERE id = ?', [imageId], (err, original) => {
-            if (err || !original) {
-                return res.json({
-                    message: 'Text added successfully',
-                    image: {
-                        filename: outputFilename,
-                        url: `/api/images/${outputFilename}`
-                    }
-                });
-            }
-
-            // Save edited image to database
-            const newImageId = path.parse(outputFilename).name;
-
-            const sql = `
-                INSERT INTO images (
-                    id, filename, original_filename, path,
-                    patient_personnummer, uploaded_by_user_id, uploaded_by_username,
-                    upload_date, file_size, mime_type, description,
-                    is_edited, parent_image_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-            `;
-
-            db.run(sql, [
-                newImageId,
-                outputFilename,
-                original.original_filename,
-                outputPath,
-                original.patient_personnummer,
-                userId || original.uploaded_by_user_id,
-                original.uploaded_by_username,
-                new Date().toISOString(),
-                0, // Will be updated later
-                original.mime_type,
-                `${original.description || ''} [Text added]`,
-                imageId
-            ], function(insertErr) {
-                if (insertErr) {
-                    console.error('Error saving edited image:', insertErr);
+        if (originalRows.length === 0) {
+            return res.json({
+                message: 'Text added successfully',
+                image: {
+                    filename: outputFilename,
+                    url: `/api/images/${outputFilename}`
                 }
-
-                // Log the edit
-                db.run(
-                    'INSERT INTO image_edits (image_id, edit_type, edit_data, edited_by_user_id) VALUES (?, ?, ?, ?)',
-                    [newImageId, 'add_text', JSON.stringify({ text, x, y, fontSize, color }), userId]
-                );
-
-                res.json({
-                    message: 'Text added successfully',
-                    image: {
-                        id: newImageId,
-                        filename: outputFilename,
-                        url: `/api/images/${outputFilename}`
-                    }
-                });
             });
+        }
+
+        const original = originalRows[0];
+        const newImageId = path.parse(outputFilename).name;
+
+        // Save edited image to database
+        const sql = `
+            INSERT INTO images (
+                id, filename, original_filename, path,
+                patient_personnummer, uploaded_by_user_id, uploaded_by_username,
+                upload_date, file_size, mime_type, description,
+                is_edited, parent_image_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `;
+
+        await db.query(sql, [
+            newImageId,
+            outputFilename,
+            original.original_filename,
+            outputPath,
+            original.patient_personnummer,
+            userId || original.uploaded_by_user_id,
+            original.uploaded_by_username,
+            new Date(),
+            0, // Will be updated later
+            original.mime_type,
+            `${original.description || ''} [Text added]`,
+            imageId
+        ]);
+
+        // Log the edit
+        await db.query(
+            'INSERT INTO image_edits (image_id, edit_type, edit_data, edited_by_user_id) VALUES (?, ?, ?, ?)',
+            [newImageId, 'add_text', JSON.stringify({ text, x, y, fontSize, color }), userId]
+        );
+
+        res.json({
+            message: 'Text added successfully',
+            image: {
+                id: newImageId,
+                filename: outputFilename,
+                url: `/api/images/${outputFilename}`
+            }
         });
     } catch (error) {
         console.error('Add text error:', error);
@@ -335,61 +315,57 @@ exports.drawOnImage = async (req, res) => {
 
         // Get original image metadata
         const imageId = path.parse(filename).name;
+        const [originalRows] = await db.query('SELECT * FROM images WHERE id = ?', [imageId]);
 
-        db.get('SELECT * FROM images WHERE id = ?', [imageId], (err, original) => {
-            if (err || !original) {
-                return res.json({
-                    message: 'Drawing added successfully',
-                    image: {
-                        filename: outputFilename,
-                        url: `/api/images/${outputFilename}`
-                    }
-                });
-            }
-
-            const newImageId = path.parse(outputFilename).name;
-
-            const sql = `
-                INSERT INTO images (
-                    id, filename, original_filename, path,
-                    patient_personnummer, uploaded_by_user_id, uploaded_by_username,
-                    upload_date, file_size, mime_type, description,
-                    is_edited, parent_image_id
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
-            `;
-
-            db.run(sql, [
-                newImageId,
-                outputFilename,
-                original.original_filename,
-                outputPath,
-                original.patient_personnummer,
-                userId || original.uploaded_by_user_id,
-                original.uploaded_by_username,
-                new Date().toISOString(),
-                0,
-                original.mime_type,
-                `${original.description || ''} [${shape} added]`,
-                imageId
-            ], function(insertErr) {
-                if (insertErr) {
-                    console.error('Error saving edited image:', insertErr);
+        if (originalRows.length === 0) {
+            return res.json({
+                message: 'Drawing added successfully',
+                image: {
+                    filename: outputFilename,
+                    url: `/api/images/${outputFilename}`
                 }
-
-                db.run(
-                    'INSERT INTO image_edits (image_id, edit_type, edit_data, edited_by_user_id) VALUES (?, ?, ?, ?)',
-                    [newImageId, 'draw', JSON.stringify({ shape, x, y, width, height, color }), userId]
-                );
-
-                res.json({
-                    message: 'Drawing added successfully',
-                    image: {
-                        id: newImageId,
-                        filename: outputFilename,
-                        url: `/api/images/${outputFilename}`
-                    }
-                });
             });
+        }
+
+        const original = originalRows[0];
+        const newImageId = path.parse(outputFilename).name;
+
+        const sql = `
+            INSERT INTO images (
+                id, filename, original_filename, path,
+                patient_personnummer, uploaded_by_user_id, uploaded_by_username,
+                upload_date, file_size, mime_type, description,
+                is_edited, parent_image_id
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 1, ?)
+        `;
+
+        await db.query(sql, [
+            newImageId,
+            outputFilename,
+            original.original_filename,
+            outputPath,
+            original.patient_personnummer,
+            userId || original.uploaded_by_user_id,
+            original.uploaded_by_username,
+            new Date(),
+            0,
+            original.mime_type,
+            `${original.description || ''} [${shape} added]`,
+            imageId
+        ]);
+
+        await db.query(
+            'INSERT INTO image_edits (image_id, edit_type, edit_data, edited_by_user_id) VALUES (?, ?, ?, ?)',
+            [newImageId, 'draw', JSON.stringify({ shape, x, y, width, height, color }), userId]
+        );
+
+        res.json({
+            message: 'Drawing added successfully',
+            image: {
+                id: newImageId,
+                filename: outputFilename,
+                url: `/api/images/${outputFilename}`
+            }
         });
     } catch (error) {
         console.error('Draw error:', error);
@@ -401,25 +377,19 @@ exports.drawOnImage = async (req, res) => {
 exports.listImages = async (req, res) => {
     try {
         const sql = `SELECT * FROM images ORDER BY upload_date DESC`;
+        const [rows] = await db.query(sql);
 
-        db.all(sql, [], (err, rows) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to list images' });
-            }
+        const images = rows.map(row => ({
+            id: row.id,
+            filename: row.filename,
+            patientPersonnummer: row.patient_personnummer,
+            uploadedBy: row.uploaded_by_username,
+            uploadDate: row.upload_date,
+            description: row.description,
+            url: `/api/images/${row.filename}`
+        }));
 
-            const images = rows.map(row => ({
-                id: row.id,
-                filename: row.filename,
-                patientPersonnummer: row.patient_personnummer,
-                uploadedBy: row.uploaded_by_username,
-                uploadDate: row.upload_date,
-                description: row.description,
-                url: `/api/images/${row.filename}`
-            }));
-
-            res.json({ images });
-        });
+        res.json({ images });
     } catch (error) {
         console.error('List images error:', error);
         res.status(500).json({ error: 'Failed to list images' });
@@ -432,36 +402,29 @@ exports.deleteImage = async (req, res) => {
         const { imageId } = req.params;
 
         // Get image info from database
-        db.get('SELECT * FROM images WHERE id = ?', [imageId], async (err, row) => {
-            if (err) {
-                console.error('Database error:', err);
-                return res.status(500).json({ error: 'Failed to delete image' });
-            }
+        const [rows] = await db.query('SELECT * FROM images WHERE id = ?', [imageId]);
 
-            if (!row) {
-                return res.status(404).json({ error: 'Image not found' });
-            }
+        if (rows.length === 0) {
+            return res.status(404).json({ error: 'Image not found' });
+        }
 
-            // Delete file
-            try {
-                await fs.unlink(row.path);
-            } catch (fileErr) {
-                console.error('Error deleting file:', fileErr);
-            }
+        const row = rows[0];
 
-            // Delete from database
-            db.run('DELETE FROM images WHERE id = ?', [imageId], function(deleteErr) {
-                if (deleteErr) {
-                    console.error('Error deleting from database:', deleteErr);
-                    return res.status(500).json({ error: 'Failed to delete image' });
-                }
+        // Delete file
+        try {
+            await fs.unlink(row.path);
+        } catch (fileErr) {
+            console.error('Error deleting file:', fileErr);
+        }
 
-                // Delete edit history
-                db.run('DELETE FROM image_edits WHERE image_id = ?', [imageId]);
+        // Delete from database
+        await db.query('DELETE FROM images WHERE id = ?', [imageId]);
 
-                res.json({ message: 'Image deleted successfully' });
-            });
-        });
+        // Delete edit history (CASCADE will handle this automatically)
+        // But we can be explicit:
+        await db.query('DELETE FROM image_edits WHERE image_id = ?', [imageId]);
+
+        res.json({ message: 'Image deleted successfully' });
     } catch (error) {
         console.error('Delete error:', error);
         res.status(500).json({ error: 'Failed to delete image' });
@@ -480,3 +443,5 @@ function escapeXml(unsafe) {
         }
     });
 }
+
+module.exports = exports;

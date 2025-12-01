@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: search-service
+  namespace: patientsystem
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: search-service
+  template:
+    metadata:
+      labels:
+        app: search-service
+    spec:
+      containers:
+      - name: search-service
+        image: search-service:latest
+        imagePullPolicy: Never
+        ports:
+        - containerPort: 8084
+          name: http
+        env:
+        - name: QUARKUS_PROFILE
+          value: "prod"
+        # Lägg till andra Quarkus-specifika miljövariabler här
