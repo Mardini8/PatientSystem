@@ -6,6 +6,7 @@ import org.journalsystem.dto.fhir.FhirBundle;
 import org.journalsystem.mapper.FhirMapper;
 
 import io.smallrye.mutiny.Uni;
+import io.smallrye.mutiny.Multi;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
@@ -31,166 +32,159 @@ public class SearchService {
     public Uni<List<PatientSearchResult>> searchPatientsByName(String name) {
         LOG.infof("Searching patients by name: %s", name);
 
-        return Uni.createFrom().item(() -> {
-            try {
-                FhirBundle bundle = fhirClient.searchPatients(name);
-                LOG.infof("FHIR bundle from server: %s", bundle);
-
-                if (bundle != null) {
-                    LOG.infof("Bundle total field: %d", bundle.total);
-                    LOG.infof("Bundle entry size: %d",
-                            bundle.entry == null ? -1 : bundle.entry.size());
-                }
-
-                List<PatientSearchResult> results =
-                        FhirMapper.bundleToPatientList(bundle);
-                LOG.infof("Found %d patients after mapping", results.size());
-                return results;
-            } catch (Exception e) {
-                LOG.error("Error searching patients", e);
-                return new ArrayList<>();
-            }
-        });
+        return fhirClient.searchPatients(name)
+                .onItem().transform(bundle -> {
+                    LOG.infof("Bundle total field: %d", bundle != null ? bundle.total : 0);
+                    return FhirMapper.bundleToPatientList(bundle);
+                })
+                .onFailure().recoverWithItem(e -> {
+                    LOG.error("Error searching patients", e);
+                    return new ArrayList<PatientSearchResult>();
+                });
     }
 
     /**
-     * Search patients by condition/diagnosis
+     * Search patients by condition
      */
     public Uni<List<PatientSearchResult>> searchPatientsByCondition(String condition) {
         LOG.infof("Searching patients by condition: %s", condition);
 
-        return Uni.createFrom().item(() -> {
-            try {
-                // Step 1: Search for conditions matching the text
-                FhirBundle conditionBundle = fhirClient.searchConditions(condition);
+        return fhirClient.searchConditions(condition)
+                .onItem().transformToUni(conditionBundle -> {
+                    if (conditionBundle == null || conditionBundle.entry == null) {
+                        return Uni.createFrom().item(new ArrayList<PatientSearchResult>());
+                    }
 
-                if (conditionBundle == null || conditionBundle.entry == null) {
-                    return new ArrayList<>();
-                }
-
-                // Step 2: Extract unique patient IDs from conditions
-                List<String> patientIds = new ArrayList<>();
-                for (FhirBundle.BundleEntry entry : conditionBundle.entry) {
-                    if (entry.resource.subject != null && entry.resource.subject.reference != null) {
-                        String patientId = entry.resource.subject.reference.replace("Patient/", "");
-                        if (!patientIds.contains(patientId)) {
+                    // Extract unique patient IDs
+                    Set<String> patientIds = new HashSet<>();
+                    for (FhirBundle.BundleEntry entry : conditionBundle.entry) {
+                        if (entry.resource.subject != null && entry.resource.subject.reference != null) {
+                            String patientId = entry.resource.subject.reference.replace("Patient/", "");
                             patientIds.add(patientId);
                         }
                     }
-                }
 
-                // Step 3: Fetch patient details for each ID
-                List<PatientSearchResult> results = new ArrayList<>();
-                for (String patientId : patientIds) {
-                    try {
-                        FhirBundle.FhirResource patient = fhirClient.getPatient(patientId);
-                        PatientSearchResult result = FhirMapper.toPatientSearchResult(patient);
-                        if (result != null) {
-                            results.add(result);
-                        }
-                    } catch (Exception e) {
-                        LOG.warnf("Could not fetch patient %s: %s", patientId, e.getMessage());
-                    }
-                }
+                    // Fetch all patients in parallel using Multi
+                    Multi<PatientSearchResult> patientsMulti = Multi.createFrom().iterable(patientIds)
+                            .onItem().transformToUniAndMerge(patientId ->
+                                    fhirClient.getPatient(patientId)
+                                            .onItem().transform(FhirMapper::toPatientSearchResult)
+                                            .onFailure().recoverWithNull()
+                            )
+                            .filter(result -> result != null);
 
-                LOG.infof("Found %d patients with condition", results.size());
-                return results;
-            } catch (Exception e) {
-                LOG.errorf("Error searching patients by condition: %s", e.getMessage());
-                return new ArrayList<>();
-            }
-        });
+                    return patientsMulti.collect().asList();
+                })
+                .onFailure().recoverWithItem(e -> {
+                    LOG.errorf("Error searching patients by condition: %s", e.getMessage());
+                    return new ArrayList<PatientSearchResult>();
+                });
     }
 
     /**
-     * Search patients by practitioner ID or identifier
-     * If the input is a numeric identifier (like 9999994392), it will first resolve it to the actual FHIR ID
+     * Search patients by practitioner ID
      */
     public Uni<List<PatientSearchResult>> searchPatientsByPractitionerId(String practitionerIdOrIdentifier) {
         LOG.infof("Searching patients by practitioner ID/identifier: %s", practitionerIdOrIdentifier);
 
-        return Uni.createFrom().item(() -> {
-            try {
-                String actualPractitionerId = resolvePractitionerId(practitionerIdOrIdentifier);
-
-                if (actualPractitionerId == null) {
-                    LOG.warnf("Could not resolve practitioner ID for: %s", practitionerIdOrIdentifier);
-                    return new ArrayList<>();
-                }
-
-                LOG.infof("Resolved practitioner ID: %s", actualPractitionerId);
-
-                // Use the actual practitioner ID
-                Set<String> uniquePatientIds = new HashSet<>();
-
-                // Ensure the practitioner reference has the correct format
-                String practitionerReference = actualPractitionerId.startsWith("Practitioner/")
-                        ? actualPractitionerId
-                        : "Practitioner/" + actualPractitionerId;
-
-                LOG.infof("Searching with practitioner reference: %s", practitionerReference);
-
-                // Search encounters where this practitioner participated
-                try {
-                    FhirBundle encounterBundle = fhirClient.searchEncountersByPractitioner(practitionerReference);
-                    if (encounterBundle != null && encounterBundle.entry != null) {
-                        LOG.infof("Found %d encounters", encounterBundle.entry.size());
-                        for (FhirBundle.BundleEntry entry : encounterBundle.entry) {
-                            if (entry.resource.subject != null && entry.resource.subject.reference != null) {
-                                String patientId = entry.resource.subject.reference.replace("Patient/", "");
-                                uniquePatientIds.add(patientId);
-                            }
-                        }
+        return resolvePractitionerIdReactive(practitionerIdOrIdentifier)
+                .onItem().transformToUni(actualPractitionerId -> {
+                    if (actualPractitionerId == null) {
+                        LOG.warnf("Could not resolve practitioner ID for: %s", practitionerIdOrIdentifier);
+                        return Uni.createFrom().item(new ArrayList<PatientSearchResult>());
                     }
-                } catch (Exception e) {
-                    LOG.warnf("Could not search encounters for practitioner %s: %s", actualPractitionerId, e.getMessage());
-                }
 
-                // Search care teams where this practitioner is a participant
-                try {
-                    FhirBundle careTeamBundle = fhirClient.searchCareTeamsByPractitioner(practitionerReference);
-                    if (careTeamBundle != null && careTeamBundle.entry != null) {
-                        LOG.infof("Found %d care teams", careTeamBundle.entry.size());
-                        for (FhirBundle.BundleEntry entry : careTeamBundle.entry) {
-                            if (entry.resource.subject != null && entry.resource.subject.reference != null) {
-                                String patientId = entry.resource.subject.reference.replace("Patient/", "");
-                                uniquePatientIds.add(patientId);
-                            }
-                        }
-                    }
-                } catch (Exception e) {
-                    LOG.warnf("Could not search care teams for practitioner %s: %s", actualPractitionerId, e.getMessage());
-                }
+                    String practitionerReference = actualPractitionerId.startsWith("Practitioner/")
+                            ? actualPractitionerId
+                            : "Practitioner/" + actualPractitionerId;
 
-                LOG.infof("Found %d unique patient IDs", uniquePatientIds.size());
+                    LOG.infof("Searching with practitioner reference: %s", practitionerReference);
 
-                // Fetch patient details for each unique ID
-                List<PatientSearchResult> results = new ArrayList<>();
-                for (String patientId : uniquePatientIds) {
-                    try {
-                        FhirBundle.FhirResource patient = fhirClient.getPatient(patientId);
-                        PatientSearchResult result = FhirMapper.toPatientSearchResult(patient);
-                        if (result != null) {
-                            results.add(result);
-                        }
-                    } catch (Exception e) {
-                        LOG.warnf("Could not fetch patient %s: %s", patientId, e.getMessage());
-                    }
-                }
+                    // Fetch encounters and care teams in parallel
+                    Uni<FhirBundle> encountersUni = fhirClient.searchEncountersByPractitioner(practitionerReference)
+                            .onFailure().recoverWithNull();
 
-                LOG.infof("Found %d patients for practitioner", results.size());
-                return results;
-            } catch (Exception e) {
-                LOG.errorf("Error searching patients by practitioner: %s", e.getMessage());
-                return new ArrayList<>();
-            }
-        });
+                    Uni<FhirBundle> careTeamsUni = fhirClient.searchCareTeamsByPractitioner(practitionerReference)
+                            .onFailure().recoverWithNull();
+
+                    return Uni.combine().all().unis(encountersUni, careTeamsUni)
+                            .asTuple()
+                            .onItem().transformToUni(tuple -> {
+                                FhirBundle encounterBundle = tuple.getItem1();
+                                FhirBundle careTeamBundle = tuple.getItem2();
+
+                                Set<String> uniquePatientIds = new HashSet<>();
+
+                                // Extract patient IDs from encounters
+                                if (encounterBundle != null && encounterBundle.entry != null) {
+                                    for (FhirBundle.BundleEntry entry : encounterBundle.entry) {
+                                        if (entry.resource.subject != null && entry.resource.subject.reference != null) {
+                                            String patientId = entry.resource.subject.reference.replace("Patient/", "");
+                                            uniquePatientIds.add(patientId);
+                                        }
+                                    }
+                                }
+
+                                // Extract patient IDs from care teams
+                                if (careTeamBundle != null && careTeamBundle.entry != null) {
+                                    for (FhirBundle.BundleEntry entry : careTeamBundle.entry) {
+                                        if (entry.resource.subject != null && entry.resource.subject.reference != null) {
+                                            String patientId = entry.resource.subject.reference.replace("Patient/", "");
+                                            uniquePatientIds.add(patientId);
+                                        }
+                                    }
+                                }
+
+                                LOG.infof("Found %d unique patient IDs", uniquePatientIds.size());
+
+                                // Fetch all patients in parallel
+                                Multi<PatientSearchResult> patientsMulti = Multi.createFrom().iterable(uniquePatientIds)
+                                        .onItem().transformToUniAndMerge(patientId ->
+                                                fhirClient.getPatient(patientId)
+                                                        .onItem().transform(FhirMapper::toPatientSearchResult)
+                                                        .onFailure().recoverWithNull()
+                                        )
+                                        .filter(result -> result != null);
+
+                                return patientsMulti.collect().asList();
+                            });
+                })
+                .onFailure().recoverWithItem(e -> {
+                    LOG.errorf("Error searching patients by practitioner: %s", e.getMessage());
+                    return new ArrayList<PatientSearchResult>();
+                });
     }
 
     /**
-     * Search encounters by practitioner ID/identifier and optional date
-     * If date is null, returns all encounters for the practitioner
-     * If date is provided, returns only encounters on that specific date
+     * Resolve practitioner identifier to FHIR ID
+     */
+    private Uni<String> resolvePractitionerIdReactive(String idOrIdentifier) {
+        // Check if it's already a UUID format (contains hyphens)
+        if (idOrIdentifier.contains("-")) {
+            return Uni.createFrom().item(idOrIdentifier.replace("Practitioner/", ""));
+        }
+
+        // Search by identifier
+        LOG.infof("Searching practitioner by identifier: %s", idOrIdentifier);
+        return fhirClient.searchPractitionerByIdentifier(idOrIdentifier)
+                .onItem().transform(bundle -> {
+                    if (bundle != null && bundle.entry != null && !bundle.entry.isEmpty()) {
+                        String practitionerId = bundle.entry.get(0).resource.id;
+                        LOG.infof("Resolved identifier %s to ID: %s", idOrIdentifier, practitionerId);
+                        return practitionerId;
+                    } else {
+                        LOG.warnf("No practitioner found with identifier: %s", idOrIdentifier);
+                        return null;
+                    }
+                })
+                .onFailure().recoverWithItem(e -> {
+                    LOG.errorf("Error resolving practitioner identifier %s: %s", idOrIdentifier, e.getMessage());
+                    return null;
+                });
+    }
+
+    /**
+     * Search encounters by practitioner
      */
     public Uni<List<EncounterSearchResult>> searchEncountersByPractitioner(
             String practitionerIdOrIdentifier,
@@ -198,85 +192,92 @@ public class SearchService {
 
         LOG.infof("Searching encounters by practitioner: %s, date: %s", practitionerIdOrIdentifier, date);
 
-        return Uni.createFrom().item(() -> {
-            try {
-                // Step 1: Resolve practitioner ID
-                String actualPractitionerId = resolvePractitionerId(practitionerIdOrIdentifier);
-
-                if (actualPractitionerId == null) {
-                    LOG.warnf("Could not resolve practitioner ID for: %s", practitionerIdOrIdentifier);
-                    return new ArrayList<>();
-                }
-
-                LOG.infof("Resolved practitioner ID: %s", actualPractitionerId);
-
-                // Step 2: Search encounters
-                FhirBundle encounterBundle;
-                if (date != null && !date.trim().isEmpty()) {
-                    // Search with both practitioner and date
-                    LOG.infof("Searching encounters for practitioner %s on date %s", actualPractitionerId, date);
-                    encounterBundle = fhirClient.searchEncountersByPractitionerAndDate(actualPractitionerId, date);
-                } else {
-                    // Search with only practitioner
-                    LOG.infof("Searching all encounters for practitioner %s", actualPractitionerId);
-                    encounterBundle = fhirClient.searchEncountersByPractitionerOnly(actualPractitionerId);
-                }
-
-                if (encounterBundle == null || encounterBundle.entry == null) {
-                    LOG.infof("No encounters found");
-                    return new ArrayList<>();
-                }
-
-                LOG.infof("Found %d encounters", encounterBundle.entry.size());
-
-                // Step 3: Convert to EncounterSearchResult with patient and practitioner names
-                List<EncounterSearchResult> results = new ArrayList<>();
-                for (FhirBundle.BundleEntry entry : encounterBundle.entry) {
-                    try {
-                        // Get patient name
-                        String patientName = "";
-                        String patientId = "";
-                        if (entry.resource.subject != null && entry.resource.subject.reference != null) {
-                            patientId = entry.resource.subject.reference.replace("Patient/", "");
-                            try {
-                                FhirBundle.FhirResource patient = fhirClient.getPatient(patientId);
-                                patientName = getFullName(patient);
-                            } catch (Exception e) {
-                                LOG.warnf("Could not fetch patient name for %s: %s", patientId, e.getMessage());
-                            }
-                        }
-
-                        // Get practitioner name
-                        String practitionerName = "";
-                        try {
-                            FhirBundle.FhirResource practitioner = fhirClient.getPractitioner(actualPractitionerId);
-                            practitionerName = getFullName(practitioner);
-                        } catch (Exception e) {
-                            LOG.warnf("Could not fetch practitioner name for %s: %s", actualPractitionerId, e.getMessage());
-                        }
-
-                        // Use FhirMapper to create the result
-                        EncounterSearchResult result = FhirMapper.toEncounterSearchResult(
-                                entry.resource,
-                                patientName,
-                                practitionerName
-                        );
-
-                        if (result != null) {
-                            results.add(result);
-                        }
-                    } catch (Exception e) {
-                        LOG.warnf("Could not map encounter: %s", e.getMessage());
+        return resolvePractitionerIdReactive(practitionerIdOrIdentifier)
+                .onItem().transformToUni(actualPractitionerId -> {
+                    if (actualPractitionerId == null) {
+                        LOG.warnf("Could not resolve practitioner ID for: %s", practitionerIdOrIdentifier);
+                        return Uni.createFrom().item(new ArrayList<EncounterSearchResult>());
                     }
-                }
 
-                LOG.infof("Returning %d encounter results", results.size());
-                return results;
-            } catch (Exception e) {
-                LOG.errorf("Error searching encounters by practitioner: %s", e.getMessage());
-                return new ArrayList<>();
-            }
-        });
+                    LOG.infof("Resolved practitioner ID: %s", actualPractitionerId);
+
+                    // Search encounters based on whether date is provided
+                    Uni<FhirBundle> encounterBundleUni;
+                    if (date != null && !date.trim().isEmpty()) {
+                        LOG.infof("Searching encounters for practitioner %s on date %s", actualPractitionerId, date);
+                        encounterBundleUni = fhirClient.searchEncountersByPractitionerAndDate(actualPractitionerId, date);
+                    } else {
+                        LOG.infof("Searching all encounters for practitioner %s", actualPractitionerId);
+                        encounterBundleUni = fhirClient.searchEncountersByPractitionerOnly(actualPractitionerId);
+                    }
+
+                    return encounterBundleUni
+                            .onItem().transformToUni(encounterBundle -> {
+                                if (encounterBundle == null || encounterBundle.entry == null) {
+                                    LOG.infof("No encounters found");
+                                    return Uni.createFrom().item(new ArrayList<EncounterSearchResult>());
+                                }
+
+                                LOG.infof("Found %d encounters", encounterBundle.entry.size());
+
+                                // Process each encounter reactively
+                                Multi<EncounterSearchResult> encountersMulti = Multi.createFrom().iterable(encounterBundle.entry)
+                                        .onItem().transformToUniAndMerge(entry ->
+                                                mapToEncounterSearchResultReactive(entry.resource, actualPractitionerId)
+                                        )
+                                        .filter(result -> result != null);
+
+                                return encountersMulti.collect().asList();
+                            });
+                })
+                .onFailure().recoverWithItem(e -> {
+                    LOG.errorf("Error searching encounters by practitioner: %s", e.getMessage());
+                    return new ArrayList<EncounterSearchResult>();
+                });
+    }
+
+    /**
+     * Map FHIR resource to EncounterSearchResult
+     */
+    private Uni<EncounterSearchResult> mapToEncounterSearchResultReactive(
+            FhirBundle.FhirResource resource,
+            String practitionerId) {
+
+        String encounterId = resource.id;
+        String patientId = null;
+
+        // Extract patient ID
+        if (resource.subject != null && resource.subject.reference != null) {
+            patientId = resource.subject.reference.replace("Patient/", "");
+        }
+
+        if (patientId == null) {
+            return Uni.createFrom().nullItem();
+        }
+
+        String finalPatientId = patientId;
+
+        // Fetch patient and practitioner names in parallel
+        Uni<String> patientNameUni = fhirClient.getPatient(patientId)
+                .onItem().transform(this::getFullName)
+                .onFailure().recoverWithItem("");
+
+        Uni<String> practitionerNameUni = fhirClient.getPractitioner(practitionerId)
+                .onItem().transform(this::getFullName)
+                .onFailure().recoverWithItem("");
+
+        return Uni.combine().all().unis(patientNameUni, practitionerNameUni)
+                .asTuple()
+                .onItem().transform(tuple -> {
+                    String patientName = tuple.getItem1();
+                    String practitionerName = tuple.getItem2();
+
+                    return FhirMapper.toEncounterSearchResult(
+                            resource,
+                            patientName,
+                            practitionerName
+                    );
+                });
     }
 
     /**
@@ -303,37 +304,4 @@ public class SearchService {
 
         return fullName.toString();
     }
-
-    /**
-     * Resolve a practitioner identifier (like 9999994392) to the actual FHIR ID
-     * If input is already a UUID format, return as-is
-     * Otherwise, search by identifier to get the actual ID
-     */
-    private String resolvePractitionerId(String idOrIdentifier) {
-        // Check if it's already a UUID format (contains hyphens)
-        if (idOrIdentifier.contains("-")) {
-            // Remove "Practitioner/" prefix if present
-            return idOrIdentifier.replace("Practitioner/", "");
-        }
-
-        // It's likely an identifier (numeric), so we need to search for it
-        try {
-            LOG.infof("Searching practitioner by identifier: %s", idOrIdentifier);
-            FhirBundle bundle = fhirClient.searchPractitionerByIdentifier(idOrIdentifier);
-
-            if (bundle != null && bundle.entry != null && !bundle.entry.isEmpty()) {
-                // Get the first matching practitioner's ID
-                String practitionerId = bundle.entry.get(0).resource.id;
-                LOG.infof("Resolved identifier %s to ID: %s", idOrIdentifier, practitionerId);
-                return practitionerId;
-            } else {
-                LOG.warnf("No practitioner found with identifier: %s", idOrIdentifier);
-                return null;
-            }
-        } catch (Exception e) {
-            LOG.errorf("Error resolving practitioner identifier %s: %s", idOrIdentifier, e.getMessage());
-            return null;
-        }
-    }
-
 }

@@ -3,15 +3,12 @@ package org.journalsystem;
 import org.journalsystem.dto.*;
 import org.journalsystem.service.SearchService;
 import io.smallrye.mutiny.Uni;
-import io.smallrye.common.annotation.Blocking;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import org.jboss.logging.Logger;
 
-import java.time.LocalDate;
-import java.time.format.DateTimeParseException;
 import java.util.List;
 
 @Path("/api/search")
@@ -36,13 +33,11 @@ public class SearchResource {
 
     /**
      * Search patients by name, condition, or practitioner ID
-     *
      * Examples:
      * GET /api/search/patients?name=Anna
      * GET /api/search/patients?condition=Diabetes
      * GET /api/search/patients?practitionerId=12345
      */
-    @Blocking
     @GET
     @Path("/patients")
     public Uni<Response> searchPatients(
@@ -73,13 +68,11 @@ public class SearchResource {
 
     /**
      * Search encounters by practitioner ID and optional date
-     *
      * Examples:
      * GET /api/search/encounters?practitionerId=9999994392
      * GET /api/search/encounters?practitionerId=9999994392&date=1989-11-21
      * GET /api/search/encounters?practitionerId=aa21bb8e-dd17-3f9e-92ed-804c556a45d8&date=1989-11-21
      */
-    @Blocking
     @GET
     @Path("/encounters")
     public Uni<Response> searchEncounters(
