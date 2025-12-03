@@ -35,20 +35,23 @@ public class SearchResource {
     }
 
     /**
-     * Search patients by name or condition
+     * Search patients by name, condition, or practitioner ID
      *
      * Examples:
      * GET /api/search/patients?name=Anna
      * GET /api/search/patients?condition=Diabetes
+     * GET /api/search/patients?practitionerId=12345
      */
     @Blocking
     @GET
     @Path("/patients")
     public Uni<Response> searchPatients(
             @QueryParam("name") String name,
-            @QueryParam("condition") String condition
+            @QueryParam("condition") String condition,
+            @QueryParam("practitionerId") String practitionerId
     ) {
-        LOG.infof("Search patients - name: %s, condition: %s", name, condition);
+        LOG.infof("Search patients - name: %s, condition: %s, practitionerId: %s",
+                name, condition, practitionerId);
 
         if (name != null && !name.trim().isEmpty()) {
             return searchService.searchPatientsByName(name.trim())
@@ -56,78 +59,44 @@ public class SearchResource {
         } else if (condition != null && !condition.trim().isEmpty()) {
             return searchService.searchPatientsByCondition(condition.trim())
                     .map(results -> Response.ok(results).build());
+        } else if (practitionerId != null && !practitionerId.trim().isEmpty()) {
+            return searchService.searchPatientsByPractitionerId(practitionerId.trim())
+                    .map(results -> Response.ok(results).build());
         }
 
         return Uni.createFrom().item(
                 Response.status(Response.Status.BAD_REQUEST)
-                        .entity("{\"error\": \"Please provide 'name' or 'condition' query parameter\"}")
+                        .entity("{\"error\": \"Please provide 'name', 'condition', or 'practitionerId' query parameter\"}")
                         .build()
         );
     }
 
     /**
-     * Get all patients for a specific doctor
+     * Search encounters by practitioner ID and optional date
      *
-     * Example:
-     * GET /api/search/doctors/123/patients
+     * Examples:
+     * GET /api/search/encounters?practitionerId=9999994392
+     * GET /api/search/encounters?practitionerId=9999994392&date=1989-11-21
+     * GET /api/search/encounters?practitionerId=aa21bb8e-dd17-3f9e-92ed-804c556a45d8&date=1989-11-21
      */
+    @Blocking
     @GET
-    @Path("/doctors/{doctorId}/patients")
-    public Uni<Response> getDoctorPatients(@PathParam("doctorId") String doctorId) {
-        LOG.infof("Get patients for doctor: %s", doctorId);
-
-        if (doctorId == null || doctorId.trim().isEmpty()) {
-            return Uni.createFrom().item(
-                    Response.status(Response.Status.BAD_REQUEST)
-                            .entity("{\"error\": \"Doctor ID is required\"}")
-                            .build()
-            );
-        }
-
-        return searchService.getDoctorPatients(doctorId)
-                .map(result -> Response.ok(result).build());
-    }
-
-    /**
-     * Get encounters for a doctor on a specific date
-     *
-     * Example:
-     * GET /api/search/doctors/123/encounters?date=2025-01-15
-     */
-    @GET
-    @Path("/doctors/{doctorId}/encounters")
-    public Uni<Response> getDoctorEncounters(
-            @PathParam("doctorId") String doctorId,
-            @QueryParam("date") String dateStr
+    @Path("/encounters")
+    public Uni<Response> searchEncounters(
+            @QueryParam("practitionerId") String practitionerId,
+            @QueryParam("date") String date
     ) {
-        LOG.infof("Get encounters for doctor %s on date %s", doctorId, dateStr);
+        LOG.infof("Search encounters - practitionerId: %s, date: %s", practitionerId, date);
 
-        if (doctorId == null || doctorId.trim().isEmpty()) {
+        if (practitionerId == null || practitionerId.trim().isEmpty()) {
             return Uni.createFrom().item(
                     Response.status(Response.Status.BAD_REQUEST)
-                            .entity("{\"error\": \"Doctor ID is required\"}")
+                            .entity("{\"error\": \"Please provide 'practitionerId' query parameter\"}")
                             .build()
             );
         }
 
-        if (dateStr == null || dateStr.trim().isEmpty()) {
-            return Uni.createFrom().item(
-                    Response.status(Response.Status.BAD_REQUEST)
-                            .entity("{\"error\": \"Date is required (format: YYYY-MM-DD)\"}")
-                            .build()
-            );
-        }
-
-        try {
-            LocalDate date = LocalDate.parse(dateStr.trim());
-            return searchService.getDoctorEncountersByDate(doctorId, date)
-                    .map(results -> Response.ok(results).build());
-        } catch (DateTimeParseException e) {
-            return Uni.createFrom().item(
-                    Response.status(Response.Status.BAD_REQUEST)
-                            .entity("{\"error\": \"Invalid date format. Use YYYY-MM-DD\"}")
-                            .build()
-            );
-        }
+        return searchService.searchEncountersByPractitioner(practitionerId.trim(), date)
+                .map(results -> Response.ok(results).build());
     }
 }

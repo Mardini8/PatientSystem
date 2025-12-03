@@ -1,5 +1,14 @@
 # Kubernetes Snabbreferens - PatientSystem
 
+## Uppdatera en deployment
+```bash
+cd <service-name>
+./mvnw clean package -DskipTests # Bara backend service tjänster
+docker build -t <service-name>:latest .
+kubectl rollout restart deployment/<service-name> -n patientsystem
+```
+
+
 ## Snabbkommandon
 
 ### Deployment
@@ -42,58 +51,6 @@ kubectl rollout restart deployment/<name> -n patientsystem         # Starta om d
 kubectl delete namespace patientsystem      # Ta bort ALLT
 kubectl delete -f clinical-service/         # Ta bort en specifik service
 ```
-
-## Tjänster och Portar
-
-| Tjänst | Port | Typ | Databas |
-|--------|------|-----|---------|
-| clinical-service | 8080 | Spring Boot | - |
-| user-service | 8081 | Spring Boot | MySQL |
-| message-service | 8082 | Spring Boot | MySQL |
-| image-service | 3001 | Node.js | MySQL |
-| search-service | 8084 | Quarkus Reactive | - |
-| frontend | 3000/30000 | React | - |
-| mysql-service | 3306 | MySQL | - |
-
-## Service URLs (inom Kubernetes)
-
-Tjänster når varandra via:
-- `http://clinical-service:8080`
-- `http://user-service:8081`
-- `http://message-service:8082`
-- `http://image-service:3001`
-- `http://search-service:8084`
-- `http://mysql-service:3306`
-
-## Frontend Access
-
-- **Lokalt:** http://localhost:30000
-
-## Vanliga Problem och Lösningar
-
-### "ImagePullBackOff" eller "ErrImagePull"
-- **Orsak:** Image finns inte lokalt
-- **Lösning:** Bygg imagen igen: `docker build -t <service>:latest .`
-- **Kontrollera:** `imagePullPolicy: Never` i deployment.yaml
-
-### Pod i "CrashLoopBackOff"
-- **Orsak:** Applikationen kraschar vid start
-- **Lösning:** Kolla logs: `kubectl logs <pod-name> -n patientsystem`
-- **Vanliga orsaker:**
-  - Fel databaskoppling
-  - Saknade miljövariabler
-  - Port redan används
-
-### Service kan inte nå MySQL
-- **Orsak:** MySQL är inte redo eller fel credentials
-- **Lösning:**
-  1. `kubectl get pods -n patientsystem` - kolla att MySQL är Running
-  2. Uppdatera SPRING_DATASOURCE_URL till `jdbc:mysql://mysql-service:3306/...`
-  3. Kontrollera username/password
-
-### Kan inte nå frontend på localhost:30000
-- **Orsak:** Service typ eller NodePort fel
-- **Lösning:** Kontrollera att frontend/service.yaml har `type: NodePort` och `nodePort: 30000`
 
 ## Bygg alla images (i projektroot)
 

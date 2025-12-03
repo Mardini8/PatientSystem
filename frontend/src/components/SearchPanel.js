@@ -33,15 +33,17 @@ function SearchPanel({ currentUser }) {
                     url = `${API_CONFIG.SEARCH_SERVICE}/api/search/patients?condition=${encodeURIComponent(searchQuery)}`;
                     break;
                 case 'my-patients':
-                    url = `${API_CONFIG.SEARCH_SERVICE}/api/search/doctors/${currentUser.foreignId}/patients`;
+                    // Use the new practitionerId parameter
+                    url = `${API_CONFIG.SEARCH_SERVICE}/api/search/patients?practitionerId=${encodeURIComponent(currentUser.foreignId)}`;
                     break;
                 case 'my-encounters':
-                    if (!selectedDate) {
-                        alert('Please select a date');
-                        setLoading(false);
-                        return;
+                    // Use the new encounters endpoint with practitionerId and optional date
+                    // If date is not selected, it will return all encounters for the practitioner
+                    if (selectedDate) {
+                        url = `${API_CONFIG.SEARCH_SERVICE}/api/search/encounters?practitionerId=${encodeURIComponent(currentUser.foreignId)}&date=${selectedDate}`;
+                    } else {
+                        url = `${API_CONFIG.SEARCH_SERVICE}/api/search/encounters?practitionerId=${encodeURIComponent(currentUser.foreignId)}`;
                     }
-                    url = `${API_CONFIG.SEARCH_SERVICE}/api/search/doctors/${currentUser.foreignId}/encounters?date=${selectedDate}`;
                     break;
                 default:
                     break;
@@ -54,15 +56,11 @@ function SearchPanel({ currentUser }) {
                 const data = await response.json();
                 console.log('Search results:', data);
 
-                // Handle different response structures
-                if (searchType === 'my-patients' && data.patients) {
-                    // DoctorPatientsResult has a 'patients' array
-                    setResults(data.patients);
-                } else if (Array.isArray(data)) {
-                    // Direct array response for name/condition/encounters
+                // All endpoints now return direct arrays
+                if (Array.isArray(data)) {
                     setResults(data);
                 } else {
-                    // Single result or other structure
+                    // Fallback for unexpected response structure
                     setResults([data]);
                 }
             } else {
@@ -194,102 +192,111 @@ function SearchPanel({ currentUser }) {
             bottom: 0,
             background: 'rgba(0,0,0,0.5)',
             display: 'flex',
-            justifyContent: 'center',
             alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 1000
         },
         modalContent: {
             background: 'white',
-            borderRadius: '12px',
             padding: '30px',
-            maxWidth: '800px',
+            borderRadius: '8px',
+            maxWidth: '600px',
             maxHeight: '80vh',
             overflow: 'auto',
-            width: '90%'
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
         },
         section: {
             marginBottom: '20px',
-            padding: '15px',
-            background: '#f9f9f9',
-            borderRadius: '8px'
+            paddingBottom: '15px',
+            borderBottom: '1px solid #e0e0e0'
         }
     };
-
-    // Patients cannot access search
-    if (isPatient) {
-        return (
-            <div style={styles.container}>
-                <h2>Access Denied</h2>
-                <p>Search functionality is only available to doctors and staff.</p>
-            </div>
-        );
-    }
 
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <h2>Patient Search</h2>
-                <p style={{ color: '#666', fontSize: '14px', marginTop: '5px' }}>
-                    Search for patients by name, condition, or view your patients and encounters
-                </p>
+                <h2 style={{ margin: 0, color: '#667eea' }}>Patient Search</h2>
+                {isDoctor && (
+                    <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>
+                        Logged in as: Dr. {currentUser.name}
+                    </p>
+                )}
             </div>
 
+            {/* Search Section */}
             <div style={styles.searchSection}>
-                {/* Search Type Selection */}
                 <div style={styles.searchType}>
-                    <button
-                        style={styles.typeButton(searchType === 'name')}
-                        onClick={() => setSearchType('name')}
-                    >
-                        🔍 Search by Name
-                    </button>
-                    <button
-                        style={styles.typeButton(searchType === 'condition')}
-                        onClick={() => setSearchType('condition')}
-                    >
-                        🏥 Search by Condition
-                    </button>
+                    {(isDoctor || isStaff) && (
+                        <>
+                            <button
+                                style={styles.typeButton(searchType === 'name')}
+                                onClick={() => {
+                                    setSearchType('name');
+                                    setResults([]);
+                                }}
+                            >
+                                Search by Name
+                            </button>
+                            <button
+                                style={styles.typeButton(searchType === 'condition')}
+                                onClick={() => {
+                                    setSearchType('condition');
+                                    setResults([]);
+                                }}
+                            >
+                                Search by Condition
+                            </button>
+                        </>
+                    )}
                     {isDoctor && (
                         <>
                             <button
                                 style={styles.typeButton(searchType === 'my-patients')}
-                                onClick={() => setSearchType('my-patients')}
+                                onClick={() => {
+                                    setSearchType('my-patients');
+                                    setResults([]);
+                                    setSearchQuery('');
+                                }}
                             >
-                                👥 My Patients
+                                My Patients
                             </button>
                             <button
                                 style={styles.typeButton(searchType === 'my-encounters')}
-                                onClick={() => setSearchType('my-encounters')}
+                                onClick={() => {
+                                    setSearchType('my-encounters');
+                                    setResults([]);
+                                    setSearchQuery('');
+                                }}
                             >
-                                📅 My Encounters
+                                My Encounters
                             </button>
                         </>
                     )}
                 </div>
 
-                {/* Search Input */}
                 {(searchType === 'name' || searchType === 'condition') && (
                     <input
                         type="text"
+                        placeholder={searchType === 'name' ? 'Enter patient name...' : 'Enter condition...'}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        placeholder={
-                            searchType === 'name'
-                                ? 'Enter patient name...'
-                                : 'Enter condition/diagnosis...'
-                        }
-                        style={styles.searchInput}
                         onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
+                        style={styles.searchInput}
                     />
                 )}
 
                 {searchType === 'my-encounters' && (
-                    <input
-                        type="date"
-                        value={selectedDate}
-                        onChange={(e) => setSelectedDate(e.target.value)}
-                        style={styles.searchInput}
-                    />
+                    <div>
+                        <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '14px' }}>
+                            Select a date (optional - leave empty to see all encounters):
+                        </label>
+                        <input
+                            type="date"
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            style={styles.searchInput}
+                        />
+                    </div>
                 )}
 
                 <button
@@ -327,7 +334,7 @@ function SearchPanel({ currentUser }) {
                             </thead>
                             <tbody>
                             {results.map((encounter, index) => (
-                                <tr key={index} style={styles.row}>
+                                <tr key={encounter.id || index} style={styles.row}>
                                     <td style={styles.td}>{encounter.patientName || 'Unknown'}</td>
                                     <td style={styles.td}>
                                         {encounter.startTime
@@ -388,7 +395,7 @@ function SearchPanel({ currentUser }) {
                 </div>
             )}
 
-            {!loading && results.length === 0 && (searchQuery || searchType === 'my-patients' || (searchType === 'my-encounters' && selectedDate)) && (
+            {!loading && results.length === 0 && (searchQuery || searchType === 'my-patients' || searchType === 'my-encounters') && (
                 <div style={{ textAlign: 'center', padding: '40px', color: '#999' }}>
                     No results found
                 </div>

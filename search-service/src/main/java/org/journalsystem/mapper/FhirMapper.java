@@ -80,12 +80,18 @@ public class FhirMapper {
         String patientId = "";
         String practitionerId = "";
 
+        // Extract patient ID from subject
+        if (resource.subject != null && resource.subject.reference != null) {
+            patientId = resource.subject.reference.replace("Patient/", "");
+        }
+
         // Extract practitioner from participants
         if (resource.participant != null && !resource.participant.isEmpty()) {
             for (FhirBundle.Participant p : resource.participant) {
                 if (p.individual != null && p.individual.reference != null) {
                     if (p.individual.reference.startsWith("Practitioner/")) {
                         practitionerId = p.individual.reference.replace("Practitioner/", "");
+                        break; // Use first practitioner found
                     }
                 }
             }

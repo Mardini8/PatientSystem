@@ -14,6 +14,10 @@ kubectl apply -f mysql/
 echo "⏳ Waiting for MySQL to be ready..."
 kubectl wait --for=condition=ready pod -l app=mysql -n patientsystem --timeout=300s
 
+# Deploy image-service PVC först (innan image-service deployment)
+echo "💾 Creating persistent storage for images..."
+kubectl apply -f image-service/image-pvc.yaml
+
 # Deploy alla microservices
 echo "🔧 Deploying microservices..."
 kubectl apply -f clinical-service/

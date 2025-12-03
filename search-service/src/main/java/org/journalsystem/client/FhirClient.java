@@ -21,22 +21,37 @@ public interface FhirClient {
     @Path("/Condition")
     FhirBundle searchConditions(@QueryParam("code:text") String conditionText);
 
+    // Practitioner methods
     @GET
-    @Path("/Condition")
-    FhirBundle getConditionsForPatient(@QueryParam("subject") String patientId);
+    @Path("/Practitioner")
+    FhirBundle searchPractitioners(@QueryParam("name") String name);
+
+    @GET
+    @Path("/Practitioner")
+    FhirBundle searchPractitionerByIdentifier(@QueryParam("identifier") String identifier);
 
     @GET
     @Path("/Practitioner/{id}")
     FhirBundle.FhirResource getPractitioner(@PathParam("id") String id);
 
+    // Encounter methods
     @GET
     @Path("/Encounter")
-    FhirBundle searchEncounters(
+    FhirBundle searchEncountersByPractitioner(@QueryParam("participant") String practitionerId);
+
+    @GET
+    @Path("/Encounter")
+    FhirBundle searchEncountersByPractitionerAndDate(
             @QueryParam("practitioner") String practitionerId,
             @QueryParam("date") String date
     );
 
     @GET
     @Path("/Encounter")
-    FhirBundle getEncountersForPractitioner(@QueryParam("participant") String practitionerId);
+    FhirBundle searchEncountersByPractitionerOnly(@QueryParam("practitioner") String practitionerId);
+
+    @GET
+    @Path("/CareTeam")
+    FhirBundle searchCareTeamsByPractitioner(@QueryParam("participant") String practitionerId);
+
 }

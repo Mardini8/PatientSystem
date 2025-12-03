@@ -5,7 +5,7 @@ const path = require('path');
 const imageRoutes = require('./routes/imageRoutes');
 
 // Initialize database
-require('./database/setup');
+const db = require('./database/setup');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -62,9 +62,25 @@ app.use((error, req, res, next) => {
     });
 });
 
-// Start server
-app.listen(PORT, () => {
-    console.log(`✓ Image Service running on http://localhost:${PORT}`);
-    console.log('✓ Database initialized');
-    console.log('✓ Ready to accept image uploads');
-});
+// Initialize database and start server
+async function startServer() {
+    try {
+        // Test database connection
+        await db.testConnection();
+
+        // Initialize tables (creates them if they don't exist)
+        await db.initializeTables();
+
+        // Start server
+        app.listen(PORT, () => {
+            console.log(`✓ Image Service running on http://localhost:${PORT}`);
+            console.log('✓ Database initialized');
+            console.log('✓ Ready to accept image uploads');
+        });
+    } catch (error) {
+        console.error('✗ Failed to start server:', error);
+        process.exit(1);
+    }
+}
+
+startServer();

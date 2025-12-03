@@ -514,7 +514,7 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
                                 style={styles.toolButton(tool === 'pen')}
                                 onClick={() => setTool('pen')}
                             >
-                                ✏️ Pen
+                                Pen
                             </button>
                             <button
                                 style={styles.toolButton(tool === 'rectangle')}

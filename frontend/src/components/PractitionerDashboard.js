@@ -206,9 +206,6 @@ function PractitionerDashboard({ user, onLogout }) {
                         {/* Images section - Only for Doctors */}
                         {isDoctor && (
                             <div style={{ marginTop: '30px' }}>
-                                <div style={styles.card}>
-                                    <h2>Images for {selectedPatient.firstName} {selectedPatient.lastName}</h2>
-                                </div>
                                 <ImageGallery
                                     currentUser={user}
                                     patientPersonnummer={selectedPatient.socialSecurityNumber}
