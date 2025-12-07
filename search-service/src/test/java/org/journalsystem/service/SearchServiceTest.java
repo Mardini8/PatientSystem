@@ -18,7 +18,6 @@ import java.util.ArrayList;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
-import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
@@ -175,7 +174,6 @@ class SearchServiceTest {
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByCondition("Diabetes")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -220,7 +218,6 @@ class SearchServiceTest {
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByCondition("Diabetes")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -259,7 +256,6 @@ class SearchServiceTest {
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByCondition("Diabetes")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -277,14 +273,11 @@ class SearchServiceTest {
 
         when(fhirClient.searchEncountersByPractitioner("Practitioner/" + practitionerId))
                 .thenReturn(Uni.createFrom().item(testEncounterBundle));
-        when(fhirClient.searchCareTeamsByPractitioner("Practitioner/" + practitionerId))
-                .thenReturn(Uni.createFrom().item(createEmptyBundle()));
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
 
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(practitionerId)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -308,14 +301,11 @@ class SearchServiceTest {
                 .thenReturn(Uni.createFrom().item(practitionerSearchBundle));
         when(fhirClient.searchEncountersByPractitioner("Practitioner/" + resolvedId))
                 .thenReturn(Uni.createFrom().item(testEncounterBundle));
-        when(fhirClient.searchCareTeamsByPractitioner("Practitioner/" + resolvedId))
-                .thenReturn(Uni.createFrom().item(createEmptyBundle()));
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
 
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(identifier)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -335,7 +325,6 @@ class SearchServiceTest {
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(identifier)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -344,31 +333,25 @@ class SearchServiceTest {
     }
 
     @Test
-    void searchPatientsByPractitionerId_shouldCombineEncountersAndCareTeams() {
+    void searchPatientsByPractitionerId_shouldHandleMultiplePatients() {
         // Arrange
         String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
 
-        FhirBundle encounterBundle = createBundleWithEncounters(List.of(
-                createTestEncounter("enc1", "Patient/123", "Practitioner/999", "2024-01-01T10:00:00", "2024-01-01T11:00:00")
-        ));
-
-        FhirBundle careTeamBundle = createBundleWithCareTeams(List.of(
-                createTestCareTeam("ct1", "Patient/456")
-        ));
-
         FhirBundle.FhirResource patient2 = createTestPatient("456", "Karin", "Lundberg", "199001011234", "1990-01-01");
 
+        FhirBundle multiEncounterBundle = createBundleWithEncounters(List.of(
+                createTestEncounter("enc1", "Patient/123", "Practitioner/999", "2024-01-01T10:00:00", "2024-01-01T11:00:00"),
+                createTestEncounter("enc2", "Patient/456", "Practitioner/999", "2024-01-02T10:00:00", "2024-01-02T11:00:00")
+        ));
+
         when(fhirClient.searchEncountersByPractitioner("Practitioner/" + practitionerId))
-                .thenReturn(Uni.createFrom().item(encounterBundle));
-        when(fhirClient.searchCareTeamsByPractitioner("Practitioner/" + practitionerId))
-                .thenReturn(Uni.createFrom().item(careTeamBundle));
+                .thenReturn(Uni.createFrom().item(multiEncounterBundle));
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
         when(fhirClient.getPatient("456")).thenReturn(Uni.createFrom().item(patient2));
 
         // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(practitionerId)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -409,7 +392,6 @@ class SearchServiceTest {
         // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -434,7 +416,6 @@ class SearchServiceTest {
         // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, date)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -463,7 +444,6 @@ class SearchServiceTest {
         // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(identifier, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -482,7 +462,6 @@ class SearchServiceTest {
         // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(identifier, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -508,7 +487,6 @@ class SearchServiceTest {
         // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -555,7 +533,6 @@ class SearchServiceTest {
         // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
-
                 .awaitItem()
                 .getItem();
 
@@ -645,18 +622,6 @@ class SearchServiceTest {
         return encounter;
     }
 
-    private FhirBundle.FhirResource createTestCareTeam(String id, String patientRef) {
-        FhirBundle.FhirResource careTeam = new FhirBundle.FhirResource();
-        careTeam.resourceType = "CareTeam";
-        careTeam.id = id;
-
-        FhirBundle.Reference subject = new FhirBundle.Reference();
-        subject.reference = patientRef;
-        careTeam.subject = subject;
-
-        return careTeam;
-    }
-
     private FhirBundle createBundleWithPatients(List<FhirBundle.FhirResource> patients) {
         FhirBundle bundle = new FhirBundle();
         bundle.resourceType = "Bundle";
@@ -715,22 +680,6 @@ class SearchServiceTest {
         for (FhirBundle.FhirResource practitioner : practitioners) {
             FhirBundle.BundleEntry entry = new FhirBundle.BundleEntry();
             entry.resource = practitioner;
-            bundle.entry.add(entry);
-        }
-
-        return bundle;
-    }
-
-    private FhirBundle createBundleWithCareTeams(List<FhirBundle.FhirResource> careTeams) {
-        FhirBundle bundle = new FhirBundle();
-        bundle.resourceType = "Bundle";
-        bundle.type = "searchset";
-        bundle.total = careTeams.size();
-        bundle.entry = new ArrayList<>();
-
-        for (FhirBundle.FhirResource careTeam : careTeams) {
-            FhirBundle.BundleEntry entry = new FhirBundle.BundleEntry();
-            entry.resource = careTeam;
             bundle.entry.add(entry);
         }
 

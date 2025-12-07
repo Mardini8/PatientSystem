@@ -100,34 +100,15 @@ public class SearchService {
 
                     LOG.infof("Searching with practitioner reference: %s", practitionerReference);
 
-                    // Fetch encounters and care teams in parallel
-                    Uni<FhirBundle> encountersUni = fhirClient.searchEncountersByPractitioner(practitionerReference)
-                            .onFailure().recoverWithNull();
-
-                    Uni<FhirBundle> careTeamsUni = fhirClient.searchCareTeamsByPractitioner(practitionerReference)
-                            .onFailure().recoverWithNull();
-
-                    return Uni.combine().all().unis(encountersUni, careTeamsUni)
-                            .asTuple()
-                            .onItem().transformToUni(tuple -> {
-                                FhirBundle encounterBundle = tuple.getItem1();
-                                FhirBundle careTeamBundle = tuple.getItem2();
-
+                    // Fetch encounters
+                    return fhirClient.searchEncountersByPractitioner(practitionerReference)
+                            .onFailure().recoverWithItem(new FhirBundle())
+                            .onItem().transformToUni(encounterBundle -> {
                                 Set<String> uniquePatientIds = new HashSet<>();
 
                                 // Extract patient IDs from encounters
                                 if (encounterBundle != null && encounterBundle.entry != null) {
                                     for (FhirBundle.BundleEntry entry : encounterBundle.entry) {
-                                        if (entry.resource.subject != null && entry.resource.subject.reference != null) {
-                                            String patientId = entry.resource.subject.reference.replace("Patient/", "");
-                                            uniquePatientIds.add(patientId);
-                                        }
-                                    }
-                                }
-
-                                // Extract patient IDs from care teams
-                                if (careTeamBundle != null && careTeamBundle.entry != null) {
-                                    for (FhirBundle.BundleEntry entry : careTeamBundle.entry) {
                                         if (entry.resource.subject != null && entry.resource.subject.reference != null) {
                                             String patientId = entry.resource.subject.reference.replace("Patient/", "");
                                             uniquePatientIds.add(patientId);
@@ -237,7 +218,7 @@ public class SearchService {
     }
 
     /**
-     * Map FHIR resource to EncounterSearchResult
+     *  Map FHIR resource to EncounterSearchResult
      */
     private Uni<EncounterSearchResult> mapToEncounterSearchResultReactive(
             FhirBundle.FhirResource resource,
