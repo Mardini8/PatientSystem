@@ -1,7 +1,7 @@
 # Kubernetes Snabbreferens - PatientSystem
 
 ## Uppdatera en deployment
-```bash
+```
 cd <service-name>
 ./mvnw clean package -DskipTests # Bara backend service tjänster
 docker build -t <service-name>:latest .

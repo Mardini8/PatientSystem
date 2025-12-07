@@ -27,11 +27,11 @@ app.get('/health', (req, res) => {
         status: 'OK',
         service: 'Image Service',
         port: PORT,
+        version: '2.0.0',
         features: [
             'Image upload with patient linking',
-            'Metadata storage',
-            'Advanced image editing',
-            'Patient-specific image retrieval'
+            'Patient-specific image retrieval',
+            'Canvas-based image editing (client-side)'
         ]
     });
 });
@@ -41,16 +41,16 @@ app.get('/', (req, res) => {
     res.json({
         message: 'Image Service API',
         version: '2.0.0',
+        description: 'Simplified image service - all editing done client-side',
         endpoints: {
-            upload: 'POST /api/images/upload',
-            getImage: 'GET /api/images/:filename',
-            listImages: 'GET /api/images',
-            patientImages: 'GET /api/images/patient/:patientPersonnummer',
-            imageMetadata: 'GET /api/images/metadata/:imageId',
-            addText: 'POST /api/images/:filename/text',
-            draw: 'POST /api/images/:filename/draw',
-            delete: 'DELETE /api/images/:imageId'
-        }
+            upload: 'POST /api/images/upload - Upload new or edited images',
+            getImage: 'GET /api/images/:filename - Retrieve an image',
+            patientImages: 'GET /api/images/patient/:patientPersonnummer - Get all images for a patient'
+        },
+        notes: [
+            'Image editing is done client-side using HTML Canvas',
+            'Edited images are saved as new files via the upload endpoint'
+        ]
     });
 });
 
@@ -68,7 +68,7 @@ async function startServer() {
         // Test database connection
         await db.testConnection();
 
-        // Initialize tables (creates them if they don't exist)
+        // Initialize tables
         await db.initializeTables();
 
         // Start server
@@ -76,6 +76,7 @@ async function startServer() {
             console.log(`✓ Image Service running on http://localhost:${PORT}`);
             console.log('✓ Database initialized');
             console.log('✓ Ready to accept image uploads');
+            console.log('✓ Client-side editing enabled');
         });
     } catch (error) {
         console.error('✗ Failed to start server:', error);

@@ -26,15 +26,15 @@ async function testConnection() {
     }
 }
 
-// Initialize tables (optional - run schema.sql manually instead)
+// Initialize tables
 async function initializeTables() {
     try {
         const connection = await pool.getConnection();
 
-        // Create images table
+        // Create images table - simplified version
         await connection.query(`
             CREATE TABLE IF NOT EXISTS images (
-                id VARCHAR(255) PRIMARY KEY,
+                                                  id VARCHAR(255) PRIMARY KEY,
                 filename VARCHAR(255) NOT NULL,
                 original_filename VARCHAR(255),
                 path TEXT NOT NULL,
@@ -46,33 +46,15 @@ async function initializeTables() {
                 mime_type VARCHAR(100),
                 description TEXT,
                 tags TEXT,
-                is_edited BOOLEAN DEFAULT FALSE,
-                parent_image_id VARCHAR(255),
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
                 INDEX idx_patient (patient_personnummer),
                 INDEX idx_upload_date (upload_date),
-                INDEX idx_uploaded_by (uploaded_by_user_id),
-                FOREIGN KEY (parent_image_id) REFERENCES images(id) ON DELETE SET NULL
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+                INDEX idx_uploaded_by (uploaded_by_user_id)
+                ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
         `);
 
-        // Create image_edits table
-        await connection.query(`
-            CREATE TABLE IF NOT EXISTS image_edits (
-                id INT AUTO_INCREMENT PRIMARY KEY,
-                image_id VARCHAR(255) NOT NULL,
-                edit_type VARCHAR(50) NOT NULL,
-                edit_data TEXT,
-                edited_by_user_id INT,
-                edited_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-                INDEX idx_image (image_id),
-                INDEX idx_edit_date (edited_at),
-                FOREIGN KEY (image_id) REFERENCES images(id) ON DELETE CASCADE
-            ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
-        `);
-
-        console.log('✓ Images tables ready');
+        console.log('✓ Images table ready');
         connection.release();
     } catch (error) {
         console.error('✗ Error creating tables:', error.message);
