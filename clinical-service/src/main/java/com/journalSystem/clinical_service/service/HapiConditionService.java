@@ -16,6 +16,7 @@ import java.util.Optional;
 public class HapiConditionService {
 
     private final HapiClientService hapiClient;
+    private final FhirLookupService fhirLookupService;
 
     public List<Condition> getAllConditions() {
         IGenericClient client = hapiClient.getClient();
@@ -32,14 +33,17 @@ public class HapiConditionService {
                 .toList();
     }
 
-    public List<Condition> getConditionsForPatient(String patientId) {
+    public List<Condition> getConditionsForPatient(String patientPersonnummer) {
         try {
             IGenericClient client = hapiClient.getClient();
+
+            // Look up the actual FHIR ID from personnummer
+            String patientFhirId = fhirLookupService.findPatientIdByPersonnummer(patientPersonnummer);
 
             Bundle bundle = client
                     .search()
                     .forResource(Condition.class)
-                    .where(Condition.PATIENT.hasId(patientId))
+                    .where(Condition.PATIENT.hasId(patientFhirId))
                     .returnBundle(Bundle.class)
                     .execute();
 
@@ -48,7 +52,7 @@ public class HapiConditionService {
                     .map(entry -> (Condition) entry.getResource())
                     .toList();
         } catch (Exception e) {
-            System.err.println("Could not fetch conditions for patient: " + patientId);
+            System.err.println("Could not fetch conditions for patient: " + patientPersonnummer);
             e.printStackTrace();
             return List.of();
         }
@@ -79,6 +83,10 @@ public class HapiConditionService {
     ) {
         IGenericClient client = hapiClient.getClient();
 
+        // Look up actual FHIR IDs from personnummer
+        String patientFhirId = fhirLookupService.findPatientIdByPersonnummer(patientPersonnummer);
+        System.out.println("Creating condition - Patient personnummer: " + patientPersonnummer + " -> FHIR ID: " + patientFhirId);
+
         Condition condition = new Condition();
 
         condition.getClinicalStatus()
@@ -91,10 +99,13 @@ public class HapiConditionService {
                 .setSystem("http://terminology.hl7.org/CodeSystem/condition-ver-status")
                 .setCode("confirmed");
 
-        condition.setSubject(new Reference("Patient/" + patientPersonnummer));
+        // Use the FHIR ID, not the personnummer
+        condition.setSubject(new Reference("Patient/" + patientFhirId));
 
         if (practitionerPersonnummer != null && !practitionerPersonnummer.isEmpty()) {
-            condition.setRecorder(new Reference("Practitioner/" + practitionerPersonnummer));
+            String practitionerFhirId = fhirLookupService.findPractitionerIdByPersonnummer(practitionerPersonnummer);
+            System.out.println("Creating condition - Practitioner personnummer: " + practitionerPersonnummer + " -> FHIR ID: " + practitionerFhirId);
+            condition.setRecorder(new Reference("Practitioner/" + practitionerFhirId));
         }
 
         condition.getCode()

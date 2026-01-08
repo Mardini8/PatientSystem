@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import API_CONFIG from '../config/api';
+import API_CONFIG, { fetchWithAuth } from '../config/api';
 
 function SearchPanel({ currentUser }) {
     const [searchType, setSearchType] = useState('name');
@@ -11,7 +11,6 @@ function SearchPanel({ currentUser }) {
 
     const isDoctor = currentUser.role === 'DOCTOR';
     const isStaff = currentUser.role === 'STAFF';
-    const isPatient = currentUser.role === 'PATIENT';
 
     const handleSearch = async () => {
         if (!searchQuery.trim() && searchType !== 'my-encounters' && searchType !== 'my-patients') {
@@ -33,12 +32,9 @@ function SearchPanel({ currentUser }) {
                     url = `${API_CONFIG.SEARCH_SERVICE}/api/search/patients?condition=${encodeURIComponent(searchQuery)}`;
                     break;
                 case 'my-patients':
-                    // Use the new practitionerId parameter
                     url = `${API_CONFIG.SEARCH_SERVICE}/api/search/patients?practitionerId=${encodeURIComponent(currentUser.foreignId)}`;
                     break;
                 case 'my-encounters':
-                    // Use the new encounters endpoint with practitionerId and optional date
-                    // If date is not selected, it will return all encounters for the practitioner
                     if (selectedDate) {
                         url = `${API_CONFIG.SEARCH_SERVICE}/api/search/encounters?practitionerId=${encodeURIComponent(currentUser.foreignId)}&date=${selectedDate}`;
                     } else {
@@ -50,17 +46,15 @@ function SearchPanel({ currentUser }) {
             }
 
             console.log('Fetching from URL:', url);
-            const response = await fetch(url);
+            const response = await fetchWithAuth(url);
 
             if (response.ok) {
                 const data = await response.json();
                 console.log('Search results:', data);
 
-                // All endpoints now return direct arrays
                 if (Array.isArray(data)) {
                     setResults(data);
                 } else {
-                    // Fallback for unexpected response structure
                     setResults([data]);
                 }
             } else {
@@ -81,14 +75,13 @@ function SearchPanel({ currentUser }) {
         setLoading(true);
 
         try {
-            // Use socialSecurityNumber as the patient identifier
             const patientId = patient.socialSecurityNumber || patient.id;
             console.log('Fetching details for patient:', patientId);
 
             const [obsRes, condRes, encRes] = await Promise.all([
-                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientId}`),
-                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientId}`),
-                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientId}`)
+                fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientId}`),
+                fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientId}`),
+                fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientId}`)
             ]);
 
             const observations = obsRes.ok ? await obsRes.json() : [];
@@ -198,75 +191,51 @@ function SearchPanel({ currentUser }) {
         },
         modalContent: {
             background: 'white',
-            padding: '30px',
             borderRadius: '8px',
+            padding: '30px',
             maxWidth: '600px',
+            width: '90%',
             maxHeight: '80vh',
-            overflow: 'auto',
-            boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+            overflowY: 'auto'
         },
         section: {
             marginBottom: '20px',
             paddingBottom: '15px',
-            borderBottom: '1px solid #e0e0e0'
+            borderBottom: '1px solid #eee'
         }
     };
 
     return (
         <div style={styles.container}>
             <div style={styles.header}>
-                <h2 style={{ margin: 0, color: '#667eea' }}>Patient Search</h2>
-                {isDoctor && (
-                    <p style={{ margin: '5px 0 0', color: '#666', fontSize: '14px' }}>
-                        Logged in as: Dr. {currentUser.name}
-                    </p>
-                )}
+                <h2 style={{ margin: 0 }}>Search</h2>
             </div>
 
-            {/* Search Section */}
             <div style={styles.searchSection}>
                 <div style={styles.searchType}>
+                    <button
+                        style={styles.typeButton(searchType === 'name')}
+                        onClick={() => setSearchType('name')}
+                    >
+                        Search by Name
+                    </button>
+                    <button
+                        style={styles.typeButton(searchType === 'condition')}
+                        onClick={() => setSearchType('condition')}
+                    >
+                        Search by Condition
+                    </button>
                     {(isDoctor || isStaff) && (
                         <>
                             <button
-                                style={styles.typeButton(searchType === 'name')}
-                                onClick={() => {
-                                    setSearchType('name');
-                                    setResults([]);
-                                }}
-                            >
-                                Search by Name
-                            </button>
-                            <button
-                                style={styles.typeButton(searchType === 'condition')}
-                                onClick={() => {
-                                    setSearchType('condition');
-                                    setResults([]);
-                                }}
-                            >
-                                Search by Condition
-                            </button>
-                        </>
-                    )}
-                    {isDoctor && (
-                        <>
-                            <button
                                 style={styles.typeButton(searchType === 'my-patients')}
-                                onClick={() => {
-                                    setSearchType('my-patients');
-                                    setResults([]);
-                                    setSearchQuery('');
-                                }}
+                                onClick={() => setSearchType('my-patients')}
                             >
                                 My Patients
                             </button>
                             <button
                                 style={styles.typeButton(searchType === 'my-encounters')}
-                                onClick={() => {
-                                    setSearchType('my-encounters');
-                                    setResults([]);
-                                    setSearchQuery('');
-                                }}
+                                onClick={() => setSearchType('my-encounters')}
                             >
                                 My Encounters
                             </button>
@@ -277,18 +246,18 @@ function SearchPanel({ currentUser }) {
                 {(searchType === 'name' || searchType === 'condition') && (
                     <input
                         type="text"
+                        style={styles.searchInput}
                         placeholder={searchType === 'name' ? 'Enter patient name...' : 'Enter condition...'}
                         value={searchQuery}
                         onChange={(e) => setSearchQuery(e.target.value)}
-                        onKeyPress={(e) => e.key === 'Enter' && handleSearch()}
-                        style={styles.searchInput}
+                        onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
                     />
                 )}
 
                 {searchType === 'my-encounters' && (
                     <div>
-                        <label style={{ display: 'block', marginBottom: '8px', color: '#666', fontSize: '14px' }}>
-                            Select a date (optional - leave empty to see all encounters):
+                        <label style={{ display: 'block', marginBottom: '5px', fontWeight: '500' }}>
+                            Filter by date (optional):
                         </label>
                         <input
                             type="date"

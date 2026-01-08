@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MessagingSystem from './MessagingSystem';
 import ImageGallery from './ImageGallery';
-import API_CONFIG from '../config/api';
+import API_CONFIG, { fetchWithAuth } from '../config/api';
 
 function PatientDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('overview');
@@ -10,19 +10,18 @@ function PatientDashboard({ user, onLogout }) {
     const [conditions, setConditions] = useState([]);
     const [encounters, setEncounters] = useState([]);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const patientId = user.foreignId;
 
-    useEffect(() => {
-        fetchPatientData();
-    }, [patientId]);
-
-    const fetchPatientData = async () => {
+    const fetchPatientData = useCallback(async () => {
         setLoading(true);
+        setError(null);
         try {
             console.log('Fetching data for patient with FHIR UUID:', patientId);
 
-            const allPatientsRes = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
+            // Use fetchWithAuth instead of fetch
+            const allPatientsRes = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (allPatientsRes.ok) {
                 const allPatients = await allPatientsRes.json();
                 const patient = allPatients.find(p => p.socialSecurityNumber === patientId);
@@ -31,10 +30,11 @@ function PatientDashboard({ user, onLogout }) {
                     setPatientInfo(patient);
                     console.log('Patient fetched from HAPI:', patient);
 
+                    // Use fetchWithAuth for all clinical data
                     const [obsRes, condRes, encRes] = await Promise.all([
-                        fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientId}`),
-                        fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientId}`),
-                        fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientId}`)
+                        fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientId}`),
+                        fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientId}`),
+                        fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientId}`)
                     ]);
 
                     if (obsRes.ok) {
@@ -62,17 +62,24 @@ function PatientDashboard({ user, onLogout }) {
                     }
                 } else {
                     console.error('Could not find patient with UUID:', patientId);
+                    setError('Could not find your patient record');
                 }
             } else {
                 console.error('Could not fetch patients, status:', allPatientsRes.status);
+                setError(`Could not load patient list (${allPatientsRes.status})`);
             }
 
         } catch (error) {
             console.error('Error fetching patient data:', error);
+            setError('Could not connect to server: ' + error.message);
         } finally {
             setLoading(false);
         }
-    };
+    }, [patientId]);
+
+    useEffect(() => {
+        fetchPatientData();
+    }, [fetchPatientData]);
 
     const styles = {
         container: {
@@ -121,6 +128,14 @@ function PatientDashboard({ user, onLogout }) {
             borderBottom: '1px solid #eee',
             display: 'flex',
             justifyContent: 'space-between'
+        },
+        errorBox: {
+            background: '#fee',
+            border: '1px solid #fcc',
+            borderRadius: '8px',
+            padding: '20px',
+            color: '#c00',
+            marginBottom: '20px'
         }
     };
 
@@ -188,6 +203,18 @@ function PatientDashboard({ user, onLogout }) {
             </nav>
 
             <div style={styles.content}>
+                {error && (
+                    <div style={styles.errorBox}>
+                        <strong>Error:</strong> {error}
+                        <button
+                            onClick={fetchPatientData}
+                            style={{ marginLeft: '20px', padding: '5px 10px' }}
+                        >
+                            Try again
+                        </button>
+                    </div>
+                )}
+
                 {loading ? (
                     <div style={styles.card}>
                         <p>Loading...</p>

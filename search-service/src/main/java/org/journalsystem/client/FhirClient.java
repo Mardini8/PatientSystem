@@ -1,12 +1,14 @@
 package org.journalsystem.client;
 
 import io.smallrye.mutiny.Uni;
+import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import org.eclipse.microprofile.rest.client.inject.RegisterRestClient;
 import org.journalsystem.dto.fhir.FhirBundle;
 
 @RegisterRestClient(configKey = "fhir-api")
+@ApplicationScoped
 @Produces(MediaType.APPLICATION_JSON)
 public interface FhirClient {
 
@@ -50,5 +52,4 @@ public interface FhirClient {
     @GET
     @Path("/Encounter")
     Uni<FhirBundle> searchEncountersByPractitionerOnly(@QueryParam("practitioner") String practitionerId);
-
 }

@@ -76,6 +76,18 @@
             <version>3.24.2</version>
             <scope>test</scope>
         </dependency>
+
+        <!-- Quarkus OIDC (JWT validation) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-oidc</artifactId>
+        </dependency>
+
+        <!-- Quarkus Security (for @RolesAllowed etc) -->
+        <dependency>
+            <groupId>io.quarkus</groupId>
+            <artifactId>quarkus-security</artifactId>
+        </dependency>
     </dependencies>
 
     <build>

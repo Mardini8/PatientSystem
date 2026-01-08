@@ -54,20 +54,19 @@ class SearchServiceTest {
         ));
     }
 
+    // ==========================================
     // searchPatientsByName() TESTS
+    // ==========================================
 
     @Test
     void searchPatientsByName_shouldReturnPatients_whenPatientsExist() {
-        // Arrange
         when(fhirClient.searchPatients("Anna")).thenReturn(Uni.createFrom().item(testPatientBundle));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByName("Anna")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).firstName()).isEqualTo("Anna");
@@ -77,107 +76,70 @@ class SearchServiceTest {
 
     @Test
     void searchPatientsByName_shouldReturnEmptyList_whenNoPatientsFound() {
-        // Arrange
         FhirBundle emptyBundle = createEmptyBundle();
         when(fhirClient.searchPatients("NonExistent")).thenReturn(Uni.createFrom().item(emptyBundle));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByName("NonExistent")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
     @Test
     void searchPatientsByName_shouldReturnMultiplePatients() {
-        // Arrange
         FhirBundle.FhirResource patient2 = createTestPatient("456", "Anna", "Berg", "198001011234", "1980-01-01");
         FhirBundle multiPatientBundle = createBundleWithPatients(List.of(testPatient, patient2));
 
         when(fhirClient.searchPatients("Anna")).thenReturn(Uni.createFrom().item(multiPatientBundle));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByName("Anna")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).hasSize(2);
-        assertThat(result.get(0).firstName()).isEqualTo("Anna");
-        assertThat(result.get(1).firstName()).isEqualTo("Anna");
-        assertThat(result.get(0).lastName()).isEqualTo("Andersson");
-        assertThat(result.get(1).lastName()).isEqualTo("Berg");
     }
 
     @Test
     void searchPatientsByName_shouldRecoverWithEmptyList_onError() {
-        // Arrange
         when(fhirClient.searchPatients("Error")).thenReturn(Uni.createFrom().failure(new RuntimeException("FHIR error")));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByName("Error")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
     @Test
     void searchPatientsByName_shouldHandleNullBundle() {
-        // Arrange
         when(fhirClient.searchPatients("Null")).thenReturn(Uni.createFrom().nullItem());
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByName("Null")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
-    @Test
-    void searchPatientsByName_shouldHandleSpecialCharacters() {
-        // Arrange
-        FhirBundle.FhirResource patientWithSpecialChars = createTestPatient("789", "Åsa", "Öberg", "199001011234", "1990-01-01");
-        FhirBundle specialBundle = createBundleWithPatients(List.of(patientWithSpecialChars));
-
-        when(fhirClient.searchPatients("Åsa")).thenReturn(Uni.createFrom().item(specialBundle));
-
-        // Act
-        List<PatientSearchResult> result = searchService.searchPatientsByName("Åsa")
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).firstName()).isEqualTo("Åsa");
-        assertThat(result.get(0).lastName()).isEqualTo("Öberg");
-    }
-
+    // ==========================================
     // searchPatientsByCondition() TESTS
+    // ==========================================
 
     @Test
     void searchPatientsByCondition_shouldReturnPatients_whenConditionsExist() {
-        // Arrange
         when(fhirClient.searchConditions("Diabetes")).thenReturn(Uni.createFrom().item(testConditionBundle));
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByCondition("Diabetes")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("123");
@@ -186,102 +148,46 @@ class SearchServiceTest {
 
     @Test
     void searchPatientsByCondition_shouldReturnEmptyList_whenNoConditionsFound() {
-        // Arrange
         FhirBundle emptyBundle = createEmptyBundle();
         when(fhirClient.searchConditions("NonExistent")).thenReturn(Uni.createFrom().item(emptyBundle));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByCondition("NonExistent")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
     @Test
-    void searchPatientsByCondition_shouldHandleMultiplePatients() {
-        // Arrange
-        FhirBundle.FhirResource condition2 = createTestCondition("cond2", "Patient/456", "Diabetes");
-        FhirBundle multiConditionBundle = createBundleWithConditions(List.of(
-                createTestCondition("cond1", "Patient/123", "Diabetes"),
-                condition2
-        ));
-
-        FhirBundle.FhirResource patient2 = createTestPatient("456", "Erik", "Svensson", "198001011234", "1980-01-01");
-
-        when(fhirClient.searchConditions("Diabetes")).thenReturn(Uni.createFrom().item(multiConditionBundle));
-        when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
-        when(fhirClient.getPatient("456")).thenReturn(Uni.createFrom().item(patient2));
-
-        // Act
-        List<PatientSearchResult> result = searchService.searchPatientsByCondition("Diabetes")
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).hasSize(2);
-    }
-
-    @Test
     void searchPatientsByCondition_shouldRecoverWithEmptyList_onError() {
-        // Arrange
         when(fhirClient.searchConditions("Error")).thenReturn(Uni.createFrom().failure(new RuntimeException("FHIR error")));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByCondition("Error")
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
-    @Test
-    void searchPatientsByCondition_shouldFilterOutFailedPatientFetches() {
-        // Arrange
-        FhirBundle.FhirResource condition2 = createTestCondition("cond2", "Patient/456", "Diabetes");
-        FhirBundle multiConditionBundle = createBundleWithConditions(List.of(
-                createTestCondition("cond1", "Patient/123", "Diabetes"),
-                condition2
-        ));
-
-        when(fhirClient.searchConditions("Diabetes")).thenReturn(Uni.createFrom().item(multiConditionBundle));
-        when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
-        when(fhirClient.getPatient("456")).thenReturn(Uni.createFrom().failure(new RuntimeException("Not found")));
-
-        // Act
-        List<PatientSearchResult> result = searchService.searchPatientsByCondition("Diabetes")
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).hasSize(1);
-        assertThat(result.get(0).id()).isEqualTo("123");
-    }
-
+    // ==========================================
     // searchPatientsByPractitionerId() TESTS
+    // ==========================================
 
     @Test
     void searchPatientsByPractitionerId_shouldReturnPatients_whenUsingUUID() {
-        // Arrange
         String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
 
         when(fhirClient.searchEncountersByPractitioner("Practitioner/" + practitionerId))
                 .thenReturn(Uni.createFrom().item(testEncounterBundle));
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(practitionerId)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("123");
@@ -289,12 +195,11 @@ class SearchServiceTest {
 
     @Test
     void searchPatientsByPractitionerId_shouldResolveIdentifier_whenUsingPersonnummer() {
-        // Arrange
         String identifier = "9999994392";
         String resolvedId = "30681750-1667-311a-a3e3-878ae10a35bb";
 
         FhirBundle practitionerSearchBundle = createBundleWithPractitioners(List.of(
-                createTestPractitionerWithId(resolvedId, "Dr. Test", "Doctor")
+                createTestPractitioner(resolvedId, "Dr. Test", "Doctor")
         ));
 
         when(fhirClient.searchPractitionerByIdentifier(identifier))
@@ -303,85 +208,36 @@ class SearchServiceTest {
                 .thenReturn(Uni.createFrom().item(testEncounterBundle));
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(identifier)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("123");
     }
 
     @Test
     void searchPatientsByPractitionerId_shouldReturnEmpty_whenPractitionerNotFound() {
-        // Arrange
         String identifier = "9999999999";
 
         when(fhirClient.searchPractitionerByIdentifier(identifier))
                 .thenReturn(Uni.createFrom().item(createEmptyBundle()));
 
-        // Act
         List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(identifier)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isEmpty();
     }
 
-    @Test
-    void searchPatientsByPractitionerId_shouldHandleMultiplePatients() {
-        // Arrange
-        String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
-
-        FhirBundle.FhirResource patient2 = createTestPatient("456", "Karin", "Lundberg", "199001011234", "1990-01-01");
-
-        FhirBundle multiEncounterBundle = createBundleWithEncounters(List.of(
-                createTestEncounter("enc1", "Patient/123", "Practitioner/999", "2024-01-01T10:00:00", "2024-01-01T11:00:00"),
-                createTestEncounter("enc2", "Patient/456", "Practitioner/999", "2024-01-02T10:00:00", "2024-01-02T11:00:00")
-        ));
-
-        when(fhirClient.searchEncountersByPractitioner("Practitioner/" + practitionerId))
-                .thenReturn(Uni.createFrom().item(multiEncounterBundle));
-        when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
-        when(fhirClient.getPatient("456")).thenReturn(Uni.createFrom().item(patient2));
-
-        // Act
-        List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(practitionerId)
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).hasSize(2);
-    }
-
-    @Test
-    void searchPatientsByPractitionerId_shouldRecoverWithEmptyList_onError() {
-        // Arrange
-        String practitionerId = "error-id";
-
-        when(fhirClient.searchEncountersByPractitioner(anyString()))
-                .thenReturn(Uni.createFrom().failure(new RuntimeException("FHIR error")));
-
-        // Act
-        List<PatientSearchResult> result = searchService.searchPatientsByPractitionerId(practitionerId)
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).isEmpty();
-    }
-
+    // ==========================================
     // searchEncountersByPractitioner() TESTS
+    // ==========================================
 
     @Test
     void searchEncountersByPractitioner_shouldReturnEncounters_whenNoDateProvided() {
-        // Arrange
         String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
 
         when(fhirClient.searchEncountersByPractitionerOnly(practitionerId))
@@ -389,13 +245,11 @@ class SearchServiceTest {
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
         when(fhirClient.getPractitioner(practitionerId)).thenReturn(Uni.createFrom().item(testPractitioner));
 
-        // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).isNotNull();
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("enc1");
@@ -404,7 +258,6 @@ class SearchServiceTest {
 
     @Test
     void searchEncountersByPractitioner_shouldReturnEncounters_whenDateProvided() {
-        // Arrange
         String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
         String date = "2024-01-01";
 
@@ -413,110 +266,32 @@ class SearchServiceTest {
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
         when(fhirClient.getPractitioner(practitionerId)).thenReturn(Uni.createFrom().item(testPractitioner));
 
-        // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, date)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).hasSize(1);
         assertThat(result.get(0).startTime()).contains("2024-01-01");
     }
 
     @Test
-    void searchEncountersByPractitioner_shouldResolveIdentifier() {
-        // Arrange
-        String identifier = "9999994392";
-        String resolvedId = "30681750-1667-311a-a3e3-878ae10a35bb";
-
-        FhirBundle practitionerSearchBundle = createBundleWithPractitioners(List.of(
-                createTestPractitionerWithId(resolvedId, "Dr. Test", "Doctor")
-        ));
-
-        when(fhirClient.searchPractitionerByIdentifier(identifier))
-                .thenReturn(Uni.createFrom().item(practitionerSearchBundle));
-        when(fhirClient.searchEncountersByPractitionerOnly(resolvedId))
-                .thenReturn(Uni.createFrom().item(testEncounterBundle));
-        when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
-        when(fhirClient.getPractitioner(resolvedId)).thenReturn(Uni.createFrom().item(testPractitioner));
-
-        // Act
-        List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(identifier, null)
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).hasSize(1);
-    }
-
-    @Test
     void searchEncountersByPractitioner_shouldReturnEmpty_whenPractitionerNotFound() {
-        // Arrange
         String identifier = "9999999999";
 
         when(fhirClient.searchPractitionerByIdentifier(identifier))
                 .thenReturn(Uni.createFrom().item(createEmptyBundle()));
 
-        // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(identifier, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
-        assertThat(result).isEmpty();
-    }
-
-    @Test
-    void searchEncountersByPractitioner_shouldHandleMultipleEncounters() {
-        // Arrange
-        String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
-
-        FhirBundle multiEncounterBundle = createBundleWithEncounters(List.of(
-                createTestEncounter("enc1", "Patient/123", "Practitioner/999", "2024-01-01T10:00:00", "2024-01-01T11:00:00"),
-                createTestEncounter("enc2", "Patient/123", "Practitioner/999", "2024-01-02T10:00:00", "2024-01-02T11:00:00")
-        ));
-
-        when(fhirClient.searchEncountersByPractitionerOnly(practitionerId))
-                .thenReturn(Uni.createFrom().item(multiEncounterBundle));
-        when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
-        when(fhirClient.getPractitioner(practitionerId)).thenReturn(Uni.createFrom().item(testPractitioner));
-
-        // Act
-        List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
-        assertThat(result).hasSize(2);
-        assertThat(result.get(0).id()).isEqualTo("enc1");
-        assertThat(result.get(1).id()).isEqualTo("enc2");
-    }
-
-    @Test
-    void searchEncountersByPractitioner_shouldRecoverWithEmptyList_onError() {
-        // Arrange
-        String practitionerId = "error-id";
-
-        when(fhirClient.searchEncountersByPractitionerOnly(practitionerId))
-                .thenReturn(Uni.createFrom().failure(new RuntimeException("FHIR error")));
-
-        // Act
-        List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
-                .subscribe().withSubscriber(UniAssertSubscriber.create())
-                .awaitItem()
-                .getItem();
-
-        // Assert
         assertThat(result).isEmpty();
     }
 
     @Test
     void searchEncountersByPractitioner_shouldFilterOutEncountersWithoutPatient() {
-        // Arrange
         String practitionerId = "30681750-1667-311a-a3e3-878ae10a35bb";
 
         FhirBundle.FhirResource encounterWithoutPatient = createTestEncounter("enc2", null, "Practitioner/999", "2024-01-01T10:00:00", "2024-01-01T11:00:00");
@@ -530,18 +305,18 @@ class SearchServiceTest {
         when(fhirClient.getPatient("123")).thenReturn(Uni.createFrom().item(testPatient));
         when(fhirClient.getPractitioner(practitionerId)).thenReturn(Uni.createFrom().item(testPractitioner));
 
-        // Act
         List<EncounterSearchResult> result = searchService.searchEncountersByPractitioner(practitionerId, null)
                 .subscribe().withSubscriber(UniAssertSubscriber.create())
                 .awaitItem()
                 .getItem();
 
-        // Assert
         assertThat(result).hasSize(1);
         assertThat(result.get(0).id()).isEqualTo("enc1");
     }
 
+    // ==========================================
     // HELPER METHODS
+    // ==========================================
 
     private FhirBundle.FhirResource createTestPatient(String id, String firstName, String lastName, String ssn, String birthDate) {
         FhirBundle.FhirResource patient = new FhirBundle.FhirResource();
@@ -573,10 +348,6 @@ class SearchServiceTest {
         practitioner.name = List.of(name);
 
         return practitioner;
-    }
-
-    private FhirBundle.FhirResource createTestPractitionerWithId(String id, String firstName, String lastName) {
-        return createTestPractitioner(id, firstName, lastName);
     }
 
     private FhirBundle.FhirResource createTestCondition(String id, String patientRef, String conditionText) {

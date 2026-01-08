@@ -14,7 +14,7 @@ import java.util.TimeZone;
 
 @RestController
 @RequestMapping("/api/v1/clinical/encounters")
-@CrossOrigin(origins = {"http://localhost:30000", "http://localhost:3000"})
+@CrossOrigin(origins = {"http://localhost:30000", "http://localhost:3000","https://patientsystem-frontend.app.cloud.cbh.kth.se"})
 @RequiredArgsConstructor
 public class EncounterController {
 

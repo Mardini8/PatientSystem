@@ -11,7 +11,7 @@ import java.util.List;
 
 @RestController
 @RequestMapping("/api/practitioners")
-@CrossOrigin(origins = {"http://localhost:30000", "http://localhost:3000"})
+@CrossOrigin(origins = {"http://localhost:30000", "http://localhost:3000","https://patientsystem-frontend.app.cloud.cbh.kth.se"})
 @RequiredArgsConstructor
 public class PractitionerController {
 

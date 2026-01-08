@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import API_CONFIG from '../config/api';
+import React, { useState, useEffect, useCallback } from 'react';
+import API_CONFIG, { fetchWithAuth } from '../config/api';
 
 function MessagingSystem({ currentUser, patientPersonnummer }) {
     const [messages, setMessages] = useState([]);
@@ -15,28 +15,16 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
     const [patients, setPatients] = useState([]);
     const [userIdToForeignId, setUserIdToForeignId] = useState({});
 
-    useEffect(() => {
-        fetchMessages();
-        if (currentUser.role === 'PATIENT') {
-            fetchRecipients();
-        } else {
-            fetchAllPatientNames();
-            fetchAllPatients();
-        }
-        fetchAllPractitionerNames();
-        fetchUserMappings();
-    }, [currentUser, patientPersonnummer]);
-
-    const fetchUserMappings = async () => {
+    const fetchUserMappings = useCallback(async () => {
         try {
-            const practResponse = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
+            const practResponse = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (practResponse.ok) {
                 const practitioners = await practResponse.json();
 
                 const mappings = {};
                 for (const pract of practitioners) {
                     try {
-                        const userResponse = await fetch(
+                        const userResponse = await fetchWithAuth(
                             `${API_CONFIG.USER_SERVICE}/api/v1/auth/user-by-foreign/${pract.socialSecurityNumber}`
                         );
                         if (userResponse.ok) {
@@ -53,11 +41,11 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         } catch (error) {
             console.error('Error fetching user mappings:', error);
         }
-    };
+    }, []);
 
-    const fetchAllPatients = async () => {
+    const fetchAllPatients = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
                 const data = await response.json();
                 setPatients(data);
@@ -65,15 +53,15 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         } catch (error) {
             console.error('Error fetching patients:', error);
         }
-    };
+    }, []);
 
-    const fetchAllPatientNames = async () => {
+    const fetchAllPatientNames = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
-                const patients = await response.json();
+                const patientsData = await response.json();
                 const names = {};
-                patients.forEach(p => {
+                patientsData.forEach(p => {
                     names[p.socialSecurityNumber] = `${p.firstName} ${p.lastName}`;
                 });
                 setPatientNames(names);
@@ -81,11 +69,11 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         } catch (error) {
             console.error('Error fetching patient names:', error);
         }
-    };
+    }, []);
 
-    const fetchAllPractitionerNames = async () => {
+    const fetchAllPractitionerNames = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (response.ok) {
                 const practitioners = await response.json();
                 const names = {};
@@ -97,33 +85,22 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         } catch (error) {
             console.error('Error fetching practitioner names:', error);
         }
-    };
+    }, []);
 
-    const formatDate = (dateString) => {
-        if (!dateString) return '';
-        const date = new Date(dateString);
-        const day = String(date.getDate()).padStart(2, '0');
-        const month = String(date.getMonth() + 1).padStart(2, '0');
-        const year = date.getFullYear();
-        const hours = String(date.getHours()).padStart(2, '0');
-        const minutes = String(date.getMinutes()).padStart(2, '0');
-        return `${day}/${month}/${year} ${hours}:${minutes}`;
-    };
-
-    const fetchMessages = async () => {
+    const fetchMessages = useCallback(async () => {
         setLoading(true);
         try {
             let allMessages = [];
             if (currentUser.role === 'PATIENT') {
                 const url = `${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/patient/${patientPersonnummer}`;
-                const response = await fetch(url);
+                const response = await fetchWithAuth(url);
                 if (response.ok) {
                     allMessages = await response.json();
                 }
             } else {
                 const [toMeRes, fromMeRes] = await Promise.all([
-                    fetch(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/to-user/${currentUser.id}`),
-                    fetch(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/from-user/${currentUser.id}`)
+                    fetchWithAuth(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/to-user/${currentUser.id}`),
+                    fetchWithAuth(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages/from-user/${currentUser.id}`)
                 ]);
 
                 const toMe = toMeRes.ok ? await toMeRes.json() : [];
@@ -138,11 +115,11 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [currentUser.role, currentUser.id, patientPersonnummer]);
 
-    const fetchRecipients = async () => {
+    const fetchRecipients = useCallback(async () => {
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/practitioners`);
             if (response.ok) {
                 const data = await response.json();
                 setRecipients(data);
@@ -150,6 +127,29 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         } catch (error) {
             console.error('Error fetching recipients:', error);
         }
+    }, []);
+
+    useEffect(() => {
+        fetchMessages();
+        if (currentUser.role === 'PATIENT') {
+            fetchRecipients();
+        } else {
+            fetchAllPatientNames();
+            fetchAllPatients();
+        }
+        fetchAllPractitionerNames();
+        fetchUserMappings();
+    }, [currentUser, patientPersonnummer, fetchMessages, fetchRecipients, fetchAllPatientNames, fetchAllPatients, fetchAllPractitionerNames, fetchUserMappings]);
+
+    const formatDate = (dateString) => {
+        if (!dateString) return '';
+        const date = new Date(dateString);
+        const day = String(date.getDate()).padStart(2, '0');
+        const month = String(date.getMonth() + 1).padStart(2, '0');
+        const year = date.getFullYear();
+        const hours = String(date.getHours()).padStart(2, '0');
+        const minutes = String(date.getMinutes()).padStart(2, '0');
+        return `${day}/${month}/${year} ${hours}:${minutes}`;
     };
 
     const handleReply = (message) => {
@@ -177,7 +177,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                 toUserId = replyTo.fromUserId;
                 messagePatientPersonnummer = patientPersonnummer;
             } else if (selectedRecipient) {
-                const userResponse = await fetch(
+                const userResponse = await fetchWithAuth(
                     `${API_CONFIG.USER_SERVICE}/api/v1/auth/user-by-foreign/${selectedRecipient}`
                 );
                 if (!userResponse.ok) {
@@ -200,7 +200,7 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
                     alert('Select a patient');
                     return;
                 }
-                const userResponse = await fetch(
+                const userResponse = await fetchWithAuth(
                     `${API_CONFIG.USER_SERVICE}/api/v1/auth/user-by-foreign/${selectedPatient}`
                 );
                 if (!userResponse.ok) {
@@ -214,9 +214,8 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
         }
 
         try {
-            const response = await fetch(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages`, {
+            const response = await fetchWithAuth(`${API_CONFIG.MESSAGE_SERVICE}/api/v1/messages`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     fromUserId: currentUser.id,
                     toUserId: toUserId,
@@ -243,9 +242,6 @@ function MessagingSystem({ currentUser, patientPersonnummer }) {
             alert('Could not send message');
         }
     };
-
-    // ... rest of the styling and JSX remains the same as before
-    // (I'll skip repeating the styles object and return statement since they're identical)
 
     const styles = {
         container: {

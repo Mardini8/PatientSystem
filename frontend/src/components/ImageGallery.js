@@ -1,5 +1,5 @@
-import React, { useState, useEffect, useRef } from 'react';
-import API_CONFIG from '../config/api';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import API_CONFIG, { fetchWithAuth, fetchWithAuthFormData } from '../config/api';
 
 function ImageGallery({ currentUser, patientPersonnummer }) {
     const [images, setImages] = useState([]);
@@ -23,18 +23,12 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
 
     const isDoctor = currentUser.role === 'DOCTOR';
     const isPatient = currentUser.role === 'PATIENT';
-    const isStaff = currentUser.role === 'STAFF';
 
-    useEffect(() => {
-        if (patientPersonnummer) {
-            fetchImages();
-        }
-    }, [patientPersonnummer]);
-
-    const fetchImages = async () => {
+    const fetchImages = useCallback(async () => {
         setLoading(true);
         try {
-            const response = await fetch(
+            // Use fetchWithAuth instead of fetch
+            const response = await fetchWithAuth(
                 `${API_CONFIG.IMAGE_SERVICE}/api/images/patient/${patientPersonnummer}`
             );
             if (response.ok) {
@@ -49,7 +43,13 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
         } finally {
             setLoading(false);
         }
-    };
+    }, [patientPersonnummer]);
+
+    useEffect(() => {
+        if (patientPersonnummer) {
+            fetchImages();
+        }
+    }, [patientPersonnummer, fetchImages]);
 
     const handleFileSelect = (e) => {
         const file = e.target.files[0];
@@ -72,14 +72,15 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
         const formData = new FormData();
         formData.append('image', uploadFile);
         formData.append('patientPersonnummer', patientPersonnummer);
-        formData.append('userId', currentUser.id);              // ✅ Fixed: userId instead of uploadedBy
-        formData.append('username', currentUser.username);       // ✅ Added: username for better tracking
+        formData.append('userId', currentUser.id);
+        formData.append('username', currentUser.username);
 
         console.log('Uploading image for patient:', patientPersonnummer);
         console.log('User ID:', currentUser.id);
 
         try {
-            const response = await fetch(`${API_CONFIG.IMAGE_SERVICE}/api/images/upload`, {
+            // Use fetchWithAuthFormData for file uploads
+            const response = await fetchWithAuthFormData(`${API_CONFIG.IMAGE_SERVICE}/api/images/upload`, {
                 method: 'POST',
                 body: formData
             });
@@ -212,46 +213,48 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
         ctx.stroke();
     };
 
+    const handleCanvasClick = (e) => {
+        if (tool !== 'text' || !text) return;
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext('2d');
+        const rect = canvas.getBoundingClientRect();
+        const x = e.clientX - rect.left;
+        const y = e.clientY - rect.top;
+
+        ctx.fillStyle = color;
+        ctx.font = `${fontSize}px Arial`;
+        ctx.fillText(text, x, y);
+    };
+
     const handleAddText = () => {
-        if (!text.trim()) {
-            alert('Please enter text');
+        if (!text) {
+            alert('Enter text first');
             return;
         }
 
         const canvas = canvasRef.current;
         const ctx = canvas.getContext('2d');
 
-        ctx.font = `bold ${fontSize}px Arial`;
         ctx.fillStyle = color;
+        ctx.font = `${fontSize}px Arial`;
         ctx.fillText(text, textPosition.x, textPosition.y);
-
-        setText('');
-    };
-
-    const handleCanvasClick = (e) => {
-        if (tool === 'text') {
-            const canvas = canvasRef.current;
-            const rect = canvas.getBoundingClientRect();
-            const x = e.clientX - rect.left;
-            const y = e.clientY - rect.top;
-            setTextPosition({ x, y });
-        }
     };
 
     const handleSaveEdited = async () => {
         const canvas = canvasRef.current;
 
-        // Convert canvas to blob
         canvas.toBlob(async (blob) => {
             const formData = new FormData();
-            formData.append('image', blob, `edited-${editorImage.filename}`);
+            formData.append('image', blob, `edited_${Date.now()}.png`);
             formData.append('patientPersonnummer', patientPersonnummer);
-            formData.append('userId', currentUser.id);          // ✅ Fixed: userId
-            formData.append('username', currentUser.username);   // ✅ Fixed: username
-            formData.append('originalImage', editorImage.filename);
+            formData.append('userId', currentUser.id);
+            formData.append('username', currentUser.username);
+            formData.append('description', `Edited version of ${editorImage.filename}`);
 
             try {
-                const response = await fetch(`${API_CONFIG.IMAGE_SERVICE}/api/images/upload`, {
+                // Use fetchWithAuthFormData for file uploads
+                const response = await fetchWithAuthFormData(`${API_CONFIG.IMAGE_SERVICE}/api/images/upload`, {
                     method: 'POST',
                     body: formData
                 });
@@ -259,13 +262,13 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
                 if (response.ok) {
                     alert('Edited image saved!');
                     setShowEditor(false);
+                    setEditorImage(null);
                     fetchImages();
                 } else {
-                    const errorData = await response.json();
-                    alert(`Failed to save edited image: ${errorData.error || 'Unknown error'}`);
+                    alert('Failed to save edited image');
                 }
             } catch (error) {
-                console.error('Save error:', error);
+                console.error('Error saving edited image:', error);
                 alert('Error saving image: ' + error.message);
             }
         }, 'image/png');
@@ -295,42 +298,35 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
         preview: {
             maxWidth: '200px',
             maxHeight: '200px',
-            marginBottom: '15px',
-            border: '2px solid #ddd',
-            borderRadius: '8px'
+            borderRadius: '8px',
+            marginBottom: '15px'
+        },
+        gallery: {
+            display: 'grid',
+            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
+            gap: '20px'
+        },
+        imageCard: {
+            border: '1px solid #ddd',
+            borderRadius: '8px',
+            overflow: 'hidden',
+            cursor: 'pointer',
+            transition: 'transform 0.2s, box-shadow 0.2s'
+        },
+        thumbnail: {
+            width: '100%',
+            height: '150px',
+            objectFit: 'cover'
         },
         button: {
             padding: '10px 20px',
             background: '#667eea',
             color: 'white',
             border: 'none',
-            borderRadius: '6px',
+            borderRadius: '4px',
             cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: '600',
-            marginRight: '10px'
-        },
-        gallery: {
-            display: 'grid',
-            gridTemplateColumns: 'repeat(auto-fill, minmax(200px, 1fr))',
-            gap: '20px',
-            marginTop: '20px'
-        },
-        imageCard: {
-            border: '2px solid #ddd',
-            borderRadius: '8px',
-            overflow: 'hidden',
-            cursor: 'pointer',
-            transition: 'transform 0.2s, box-shadow 0.2s',
-            ':hover': {
-                transform: 'scale(1.05)',
-                boxShadow: '0 4px 12px rgba(0,0,0,0.2)'
-            }
-        },
-        thumbnail: {
-            width: '100%',
-            height: '200px',
-            objectFit: 'cover'
+            marginRight: '10px',
+            fontSize: '14px'
         },
         modal: {
             position: 'fixed',
@@ -340,25 +336,25 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
             bottom: 0,
             background: 'rgba(0,0,0,0.8)',
             display: 'flex',
-            justifyContent: 'center',
             alignItems: 'center',
+            justifyContent: 'center',
             zIndex: 1000
         },
         modalContent: {
             background: 'white',
-            borderRadius: '12px',
-            padding: '20px',
+            padding: '30px',
+            borderRadius: '8px',
             maxWidth: '90vw',
             maxHeight: '90vh',
             overflow: 'auto'
         },
         toolbar: {
             display: 'flex',
+            flexWrap: 'wrap',
             gap: '10px',
             marginBottom: '15px',
-            flexWrap: 'wrap',
             padding: '15px',
-            background: '#f5f5f5',
+            background: '#f0f0f0',
             borderRadius: '8px'
         },
         toolButton: (active) => ({
@@ -366,41 +362,28 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
             background: active ? '#667eea' : '#ddd',
             color: active ? 'white' : '#333',
             border: 'none',
-            borderRadius: '6px',
-            cursor: 'pointer',
-            fontSize: '14px',
-            fontWeight: active ? '600' : '400'
+            borderRadius: '4px',
+            cursor: 'pointer'
         }),
         canvas: {
             border: '2px solid #ddd',
             maxWidth: '100%',
-            cursor: tool === 'pen' ? 'crosshair' : 'default'
+            cursor: 'crosshair'
+        },
+        colorPicker: {
+            width: '40px',
+            height: '40px',
+            padding: '0',
+            border: 'none',
+            cursor: 'pointer'
         },
         textInput: {
             padding: '8px',
             border: '1px solid #ddd',
             borderRadius: '4px',
-            fontSize: '14px',
-            marginRight: '10px'
-        },
-        colorPicker: {
-            width: '50px',
-            height: '35px',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer'
+            fontSize: '14px'
         }
     };
-
-    // Staff cannot see images
-    if (isStaff) {
-        return (
-            <div style={styles.container}>
-                <h2>Access Denied</h2>
-                <p>Staff members do not have access to patient images.</p>
-            </div>
-        );
-    }
 
     return (
         <div style={styles.container}>
@@ -514,7 +497,7 @@ function ImageGallery({ currentUser, patientPersonnummer }) {
                                 style={styles.toolButton(tool === 'pen')}
                                 onClick={() => setTool('pen')}
                             >
-                                Pen
+                                ✏️ Pen
                             </button>
                             <button
                                 style={styles.toolButton(tool === 'rectangle')}

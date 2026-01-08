@@ -3,6 +3,7 @@ package org.journalsystem;
 import org.journalsystem.dto.*;
 import org.journalsystem.service.SearchService;
 import io.smallrye.mutiny.Uni;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -22,7 +23,7 @@ public class SearchResource {
     SearchService searchService;
 
     /**
-     * Health check endpoint
+     * Health check endpoint (public)
      */
     @GET
     @Path("/hello")
@@ -33,6 +34,8 @@ public class SearchResource {
 
     /**
      * Search patients by name, condition, or practitioner ID
+     * Requires: doctor or staff role
+     *
      * Examples:
      * GET /api/search/patients?name=Anna
      * GET /api/search/patients?condition=Diabetes
@@ -40,6 +43,7 @@ public class SearchResource {
      */
     @GET
     @Path("/patients")
+    @RolesAllowed({"doctor", "staff"})
     public Uni<Response> searchPatients(
             @QueryParam("name") String name,
             @QueryParam("condition") String condition,
@@ -68,13 +72,15 @@ public class SearchResource {
 
     /**
      * Search encounters by practitioner ID and optional date
+     * Requires: doctor role only (more restricted)
+     *
      * Examples:
      * GET /api/search/encounters?practitionerId=9999994392
      * GET /api/search/encounters?practitionerId=9999994392&date=1989-11-21
-     * GET /api/search/encounters?practitionerId=aa21bb8e-dd17-3f9e-92ed-804c556a45d8&date=1989-11-21
      */
     @GET
     @Path("/encounters")
+    @RolesAllowed({"doctor"})
     public Uni<Response> searchEncounters(
             @QueryParam("practitionerId") String practitionerId,
             @QueryParam("date") String date

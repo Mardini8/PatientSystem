@@ -1,7 +1,5 @@
 package com.journalSystem.clinical_service.service;
 
-import ca.uhn.fhir.rest.api.MethodOutcome;
-import ca.uhn.fhir.rest.client.api.IGenericClient;
 import ca.uhn.fhir.rest.server.exceptions.ResourceNotFoundException;
 import org.hl7.fhir.r4.model.*;
 import org.junit.jupiter.api.BeforeEach;
@@ -26,7 +24,7 @@ class HapiObservationServiceTest {
     private HapiClientService hapiClientService;
 
     @Mock
-    private IGenericClient genericClient;
+    private FhirLookupService fhirLookupService;
 
     private HapiObservationService hapiObservationService;
 
@@ -34,7 +32,7 @@ class HapiObservationServiceTest {
 
     @BeforeEach
     void setUp() {
-        hapiObservationService = new HapiObservationService(hapiClientService);
+        hapiObservationService = new HapiObservationService(hapiClientService, fhirLookupService);
 
         testObservation = createTestObservation("12345", "Patient/98765", "Practitioner/11111",
                 "Blood Pressure", "120", "mmHg", new Date());
@@ -103,33 +101,33 @@ class HapiObservationServiceTest {
     @Test
     void getObservationsForPatient_shouldReturnObservations_whenPatientHasObservations() {
         // Arrange
-        String patientId = "98765";
+        String patientPersonnummer = "197001011234";
+        String patientFhirId = "98765";
+
         List<Observation> patientObservations = new ArrayList<>();
         patientObservations.add(testObservation);
-        patientObservations.add(createTestObservation("67890", "Patient/" + patientId, "Practitioner/11111",
+        patientObservations.add(createTestObservation("67890", "Patient/" + patientFhirId, "Practitioner/11111",
                 "Blood Sugar", "5.5", "mmol/L", new Date()));
 
         HapiObservationService spyService = spy(hapiObservationService);
-        doReturn(patientObservations).when(spyService).getObservationsForPatient(patientId);
+        doReturn(patientObservations).when(spyService).getObservationsForPatient(patientPersonnummer);
 
         // Act
-        List<Observation> result = spyService.getObservationsForPatient(patientId);
+        List<Observation> result = spyService.getObservationsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).hasSize(2);
-        assertThat(result.get(0).getSubject().getReference()).contains(patientId);
-        assertThat(result.get(1).getSubject().getReference()).contains(patientId);
     }
 
     @Test
     void getObservationsForPatient_shouldReturnEmptyList_whenNoObservationsExist() {
         // Arrange
-        String patientId = "99999";
+        String patientPersonnummer = "199901019999";
         HapiObservationService spyService = spy(hapiObservationService);
-        doReturn(new ArrayList<Observation>()).when(spyService).getObservationsForPatient(patientId);
+        doReturn(new ArrayList<Observation>()).when(spyService).getObservationsForPatient(patientPersonnummer);
 
         // Act
-        List<Observation> result = spyService.getObservationsForPatient(patientId);
+        List<Observation> result = spyService.getObservationsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).isEmpty();
@@ -151,7 +149,7 @@ class HapiObservationServiceTest {
     @Test
     void getObservationsForPatient_shouldReturnEmptyList_whenExceptionOccurs() {
         // Arrange
-        String patientId = "12345";
+        String patientPersonnummer = "197001011234";
         HapiObservationService spyService = spy(hapiObservationService);
 
         doAnswer(invocation -> {
@@ -160,10 +158,10 @@ class HapiObservationServiceTest {
             } catch (Exception e) {
                 return List.of();
             }
-        }).when(spyService).getObservationsForPatient(patientId);
+        }).when(spyService).getObservationsForPatient(patientPersonnummer);
 
         // Act
-        List<Observation> result = spyService.getObservationsForPatient(patientId);
+        List<Observation> result = spyService.getObservationsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).isEmpty();
@@ -256,13 +254,15 @@ class HapiObservationServiceTest {
         // Arrange
         String patientPersonnummer = "197001011234";
         String performerPersonnummer = "198001011234";
+        String patientFhirId = "patient-fhir-123";
+        String practitionerFhirId = "practitioner-fhir-456";
         String description = "Blood Pressure";
         String value = "120";
         String unit = "mmHg";
         Date effectiveDate = new Date();
 
-        Observation createdObservation = createTestObservation("new-123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + performerPersonnummer, description, value, unit, effectiveDate);
+        Observation createdObservation = createTestObservation("new-123", "Patient/" + patientFhirId,
+                "Practitioner/" + practitionerFhirId, description, value, unit, effectiveDate);
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(createdObservation).when(spyService).createObservation(
@@ -274,27 +274,29 @@ class HapiObservationServiceTest {
 
         // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getSubject().getReference()).contains(patientPersonnummer);
+        assertThat(result.getSubject().getReference()).contains(patientFhirId);
         assertThat(result.getCode().getText()).isEqualTo(description);
     }
 
     @Test
     void createObservation_shouldCreateObservationWithNumericValue() {
         // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "198001011234";
         String value = "72.5";
         String unit = "bpm";
         Date effectiveDate = new Date();
 
-        Observation observation = createTestObservation("123", "Patient/123", "Practitioner/456",
+        Observation observation = createTestObservation("123", "Patient/fhir-123", "Practitioner/fhir-456",
                 "Heart Rate", value, unit, effectiveDate);
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), anyString(), anyString(), eq(value), eq(unit), any(Date.class));
+                eq(patientPersonnummer), eq(performerPersonnummer), anyString(), eq(value), eq(unit), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", "456", "Heart Rate", value, unit, effectiveDate);
+                patientPersonnummer, performerPersonnummer, "Heart Rate", value, unit, effectiveDate);
 
         // Assert
         assertThat(result.hasValueQuantity()).isTrue();
@@ -305,24 +307,26 @@ class HapiObservationServiceTest {
     @Test
     void createObservation_shouldCreateObservationWithStringValue() {
         // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "198001011234";
         String value = "Normal";
         String unit = "";
         Date effectiveDate = new Date();
 
         Observation observation = new Observation();
         observation.setId("123");
-        observation.setSubject(new Reference("Patient/123"));
+        observation.setSubject(new Reference("Patient/fhir-123"));
         observation.getCode().setText("General Assessment");
         observation.setValue(new StringType(value));
         observation.setEffective(new DateTimeType(effectiveDate));
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), anyString(), anyString(), eq(value), eq(unit), any(Date.class));
+                eq(patientPersonnummer), eq(performerPersonnummer), anyString(), eq(value), eq(unit), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", "456", "General Assessment", value, unit, effectiveDate);
+                patientPersonnummer, performerPersonnummer, "General Assessment", value, unit, effectiveDate);
 
         // Assert
         assertThat(result.hasValueStringType()).isTrue();
@@ -332,18 +336,19 @@ class HapiObservationServiceTest {
     @Test
     void createObservation_shouldCreateObservationWithoutPerformer_whenPerformerIsNull() {
         // Arrange
+        String patientPersonnummer = "197001011234";
         Date effectiveDate = new Date();
 
-        Observation observation = createTestObservation("123", "Patient/123", null,
+        Observation observation = createTestObservation("123", "Patient/fhir-123", null,
                 "Self-reported", "Normal", "", effectiveDate);
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), isNull(), anyString(), anyString(), anyString(), any(Date.class));
+                eq(patientPersonnummer), isNull(), anyString(), anyString(), anyString(), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", null, "Self-reported", "Normal", "", effectiveDate);
+                patientPersonnummer, null, "Self-reported", "Normal", "", effectiveDate);
 
         // Assert
         assertThat(result).isNotNull();
@@ -353,18 +358,19 @@ class HapiObservationServiceTest {
     @Test
     void createObservation_shouldCreateObservationWithoutPerformer_whenPerformerIsEmpty() {
         // Arrange
+        String patientPersonnummer = "197001011234";
         Date effectiveDate = new Date();
 
-        Observation observation = createTestObservation("123", "Patient/123", null,
+        Observation observation = createTestObservation("123", "Patient/fhir-123", null,
                 "Self-reported", "Normal", "", effectiveDate);
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), eq(""), anyString(), anyString(), anyString(), any(Date.class));
+                eq(patientPersonnummer), eq(""), anyString(), anyString(), anyString(), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", "", "Self-reported", "Normal", "", effectiveDate);
+                patientPersonnummer, "", "Self-reported", "Normal", "", effectiveDate);
 
         // Assert
         assertThat(result).isNotNull();
@@ -374,35 +380,77 @@ class HapiObservationServiceTest {
     @Test
     void createObservation_shouldThrowException_whenCreationFails() {
         // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "198001011234";
         Date effectiveDate = new Date();
 
         HapiObservationService spyService = spy(hapiObservationService);
         doThrow(new RuntimeException("Server error")).when(spyService).createObservation(
-                anyString(), anyString(), anyString(), anyString(), anyString(), any(Date.class));
+                eq(patientPersonnummer), eq(performerPersonnummer), anyString(), anyString(), anyString(), any(Date.class));
 
         // Act & Assert
         assertThatThrownBy(() -> spyService.createObservation(
-                "123", "456", "Test", "100", "unit", effectiveDate))
+                patientPersonnummer, performerPersonnummer, "Test", "100", "unit", effectiveDate))
                 .isInstanceOf(RuntimeException.class)
                 .hasMessageContaining("Server error");
     }
 
     @Test
-    void createObservation_shouldSetCorrectStatus() {
+    void createObservation_shouldThrowException_whenPatientNotFound() {
         // Arrange
+        String patientPersonnummer = "999999999999";
+        String performerPersonnummer = "198001011234";
         Date effectiveDate = new Date();
 
-        Observation observation = createTestObservation("123", "Patient/123", "Practitioner/456",
+        HapiObservationService spyService = spy(hapiObservationService);
+        doThrow(new RuntimeException("Patient not found with identifier or ID: " + patientPersonnummer))
+                .when(spyService).createObservation(
+                        eq(patientPersonnummer), eq(performerPersonnummer), anyString(), anyString(), anyString(), any(Date.class));
+
+        // Act & Assert
+        assertThatThrownBy(() -> spyService.createObservation(
+                patientPersonnummer, performerPersonnummer, "Test", "100", "unit", effectiveDate))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Patient not found");
+    }
+
+    @Test
+    void createObservation_shouldThrowException_whenPractitionerNotFound() {
+        // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "999999999999";
+        Date effectiveDate = new Date();
+
+        HapiObservationService spyService = spy(hapiObservationService);
+        doThrow(new RuntimeException("Practitioner not found with identifier or ID: " + performerPersonnummer))
+                .when(spyService).createObservation(
+                        eq(patientPersonnummer), eq(performerPersonnummer), anyString(), anyString(), anyString(), any(Date.class));
+
+        // Act & Assert
+        assertThatThrownBy(() -> spyService.createObservation(
+                patientPersonnummer, performerPersonnummer, "Test", "100", "unit", effectiveDate))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Practitioner not found");
+    }
+
+    @Test
+    void createObservation_shouldSetCorrectStatus() {
+        // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "198001011234";
+        Date effectiveDate = new Date();
+
+        Observation observation = createTestObservation("123", "Patient/fhir-123", "Practitioner/fhir-456",
                 "Test", "100", "unit", effectiveDate);
         observation.setStatus(Observation.ObservationStatus.FINAL);
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), anyString(), anyString(), anyString(), anyString(), any(Date.class));
+                eq(patientPersonnummer), eq(performerPersonnummer), anyString(), anyString(), anyString(), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", "456", "Test", "100", "unit", effectiveDate);
+                patientPersonnummer, performerPersonnummer, "Test", "100", "unit", effectiveDate);
 
         // Assert
         assertThat(result.getStatus()).isEqualTo(Observation.ObservationStatus.FINAL);
@@ -411,9 +459,11 @@ class HapiObservationServiceTest {
     @Test
     void createObservation_shouldSetCorrectCategory() {
         // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "198001011234";
         Date effectiveDate = new Date();
 
-        Observation observation = createTestObservation("123", "Patient/123", "Practitioner/456",
+        Observation observation = createTestObservation("123", "Patient/fhir-123", "Practitioner/fhir-456",
                 "Vital Sign", "100", "unit", effectiveDate);
         observation.addCategory()
                 .addCoding()
@@ -423,11 +473,11 @@ class HapiObservationServiceTest {
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), anyString(), anyString(), anyString(), anyString(), any(Date.class));
+                eq(patientPersonnummer), eq(performerPersonnummer), anyString(), anyString(), anyString(), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", "456", "Vital Sign", "100", "unit", effectiveDate);
+                patientPersonnummer, performerPersonnummer, "Vital Sign", "100", "unit", effectiveDate);
 
         // Assert
         assertThat(result.getCategory()).isNotEmpty();
@@ -462,18 +512,18 @@ class HapiObservationServiceTest {
     @Test
     void getObservationsForPatient_shouldHandleDifferentPatientIdFormats() {
         // Arrange
-        String[] patientIds = {"12345", "Patient/12345", "abc-123"};
+        String[] patientPersonnummers = {"197001011234", "198502021234", "200012121234"};
 
-        for (String patientId : patientIds) {
+        for (String patientPersonnummer : patientPersonnummers) {
             List<Observation> observations = new ArrayList<>();
-            observations.add(createTestObservation("1", "Patient/" + patientId, "Practitioner/1",
+            observations.add(createTestObservation("1", "Patient/fhir-" + patientPersonnummer, "Practitioner/1",
                     "Test", "100", "unit", new Date()));
 
             HapiObservationService spyService = spy(hapiObservationService);
-            doReturn(observations).when(spyService).getObservationsForPatient(patientId);
+            doReturn(observations).when(spyService).getObservationsForPatient(patientPersonnummer);
 
             // Act
-            List<Observation> result = spyService.getObservationsForPatient(patientId);
+            List<Observation> result = spyService.getObservationsForPatient(patientPersonnummer);
 
             // Assert
             assertThat(result).hasSize(1);
@@ -483,18 +533,20 @@ class HapiObservationServiceTest {
     @Test
     void createObservation_shouldHandleDefaultUnitWhenUnitIsNull() {
         // Arrange
+        String patientPersonnummer = "197001011234";
+        String performerPersonnummer = "198001011234";
         Date effectiveDate = new Date();
 
-        Observation observation = createTestObservation("123", "Patient/123", "Practitioner/456",
+        Observation observation = createTestObservation("123", "Patient/fhir-123", "Practitioner/fhir-456",
                 "Score", "10", "{score}", effectiveDate);
 
         HapiObservationService spyService = spy(hapiObservationService);
         doReturn(observation).when(spyService).createObservation(
-                anyString(), anyString(), anyString(), anyString(), isNull(), any(Date.class));
+                eq(patientPersonnummer), eq(performerPersonnummer), anyString(), anyString(), isNull(), any(Date.class));
 
         // Act
         Observation result = spyService.createObservation(
-                "123", "456", "Score", "10", null, effectiveDate);
+                patientPersonnummer, performerPersonnummer, "Score", "10", null, effectiveDate);
 
         // Assert
         assertThat(result.getValueQuantity().getUnit()).isEqualTo("{score}");

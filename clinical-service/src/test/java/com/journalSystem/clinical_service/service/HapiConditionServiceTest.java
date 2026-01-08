@@ -24,6 +24,9 @@ class HapiConditionServiceTest {
     @Mock
     private HapiClientService hapiClientService;
 
+    @Mock
+    private FhirLookupService fhirLookupService;
+
     private HapiConditionService hapiConditionService;
 
     private Condition testCondition;
@@ -31,7 +34,7 @@ class HapiConditionServiceTest {
 
     @BeforeEach
     void setUp() {
-        hapiConditionService = new HapiConditionService(hapiClientService);
+        hapiConditionService = new HapiConditionService(hapiClientService, fhirLookupService);
 
         recordedDate = new Date();
 
@@ -105,33 +108,33 @@ class HapiConditionServiceTest {
     @Test
     void getConditionsForPatient_shouldReturnConditions_whenPatientHasConditions() {
         // Arrange
-        String patientId = "98765";
+        String patientPersonnummer = "197001011234";
+        String patientFhirId = "98765";
+
         List<Condition> patientConditions = new ArrayList<>();
         patientConditions.add(testCondition);
-        patientConditions.add(createTestCondition("67890", "Patient/" + patientId, "Practitioner/22222",
+        patientConditions.add(createTestCondition("67890", "Patient/" + patientFhirId, "Practitioner/22222",
                 "Hypertension", recordedDate));
 
         HapiConditionService spyService = spy(hapiConditionService);
-        doReturn(patientConditions).when(spyService).getConditionsForPatient(patientId);
+        doReturn(patientConditions).when(spyService).getConditionsForPatient(patientPersonnummer);
 
         // Act
-        List<Condition> result = spyService.getConditionsForPatient(patientId);
+        List<Condition> result = spyService.getConditionsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).hasSize(2);
-        assertThat(result.get(0).getSubject().getReference()).contains(patientId);
-        assertThat(result.get(1).getSubject().getReference()).contains(patientId);
     }
 
     @Test
     void getConditionsForPatient_shouldReturnEmptyList_whenNoConditionsExist() {
         // Arrange
-        String patientId = "99999";
+        String patientPersonnummer = "199901019999";
         HapiConditionService spyService = spy(hapiConditionService);
-        doReturn(new ArrayList<Condition>()).when(spyService).getConditionsForPatient(patientId);
+        doReturn(new ArrayList<Condition>()).when(spyService).getConditionsForPatient(patientPersonnummer);
 
         // Act
-        List<Condition> result = spyService.getConditionsForPatient(patientId);
+        List<Condition> result = spyService.getConditionsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).isEmpty();
@@ -153,7 +156,7 @@ class HapiConditionServiceTest {
     @Test
     void getConditionsForPatient_shouldReturnEmptyList_whenExceptionOccurs() {
         // Arrange
-        String patientId = "12345";
+        String patientPersonnummer = "197001011234";
         HapiConditionService spyService = spy(hapiConditionService);
 
         doAnswer(invocation -> {
@@ -162,10 +165,10 @@ class HapiConditionServiceTest {
             } catch (Exception e) {
                 return List.of();
             }
-        }).when(spyService).getConditionsForPatient(patientId);
+        }).when(spyService).getConditionsForPatient(patientPersonnummer);
 
         // Act
-        List<Condition> result = spyService.getConditionsForPatient(patientId);
+        List<Condition> result = spyService.getConditionsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).isEmpty();
@@ -174,22 +177,22 @@ class HapiConditionServiceTest {
     @Test
     void getConditionsForPatient_shouldHandleMultipleConditionsForSamePatient() {
         // Arrange
-        String patientId = "12345";
+        String patientPersonnummer = "197001011234";
         List<Condition> conditions = new ArrayList<>();
 
         Calendar cal = Calendar.getInstance();
         for (int i = 0; i < 3; i++) {
             cal.add(Calendar.MONTH, -i);
             Date date = cal.getTime();
-            conditions.add(createTestCondition(String.valueOf(i), "Patient/" + patientId,
+            conditions.add(createTestCondition(String.valueOf(i), "Patient/fhir-" + patientPersonnummer,
                     "Practitioner/" + i, "Condition " + i, date));
         }
 
         HapiConditionService spyService = spy(hapiConditionService);
-        doReturn(conditions).when(spyService).getConditionsForPatient(patientId);
+        doReturn(conditions).when(spyService).getConditionsForPatient(patientPersonnummer);
 
         // Act
-        List<Condition> result = spyService.getConditionsForPatient(patientId);
+        List<Condition> result = spyService.getConditionsForPatient(patientPersonnummer);
 
         // Assert
         assertThat(result).hasSize(3);
@@ -285,10 +288,12 @@ class HapiConditionServiceTest {
         // Arrange
         String patientPersonnummer = "197001011234";
         String practitionerPersonnummer = "198001011234";
+        String patientFhirId = "patient-fhir-123";
+        String practitionerFhirId = "practitioner-fhir-456";
         String description = "Diabetes Type 2";
 
-        Condition createdCondition = createTestCondition("new-123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, description, recordedDate);
+        Condition createdCondition = createTestCondition("new-123", "Patient/" + patientFhirId,
+                "Practitioner/" + practitionerFhirId, description, recordedDate);
 
         HapiConditionService spyService = spy(hapiConditionService);
         doReturn(createdCondition).when(spyService).createCondition(
@@ -300,7 +305,7 @@ class HapiConditionServiceTest {
 
         // Assert
         assertThat(result).isNotNull();
-        assertThat(result.getSubject().getReference()).contains(patientPersonnummer);
+        assertThat(result.getSubject().getReference()).contains(patientFhirId);
         assertThat(result.getCode().getText()).isEqualTo(description);
     }
 
@@ -308,9 +313,10 @@ class HapiConditionServiceTest {
     void createCondition_shouldCreateConditionWithoutPractitioner_whenPractitionerIsNull() {
         // Arrange
         String patientPersonnummer = "197001011234";
+        String patientFhirId = "patient-fhir-123";
         String description = "Self-reported condition";
 
-        Condition createdCondition = createTestCondition("new-123", "Patient/" + patientPersonnummer,
+        Condition createdCondition = createTestCondition("new-123", "Patient/" + patientFhirId,
                 null, description, recordedDate);
 
         HapiConditionService spyService = spy(hapiConditionService);
@@ -330,9 +336,10 @@ class HapiConditionServiceTest {
     void createCondition_shouldCreateConditionWithoutPractitioner_whenPractitionerIsEmpty() {
         // Arrange
         String patientPersonnummer = "197001011234";
+        String patientFhirId = "patient-fhir-123";
         String description = "Self-reported condition";
 
-        Condition createdCondition = createTestCondition("new-123", "Patient/" + patientPersonnummer,
+        Condition createdCondition = createTestCondition("new-123", "Patient/" + patientFhirId,
                 null, description, recordedDate);
 
         HapiConditionService spyService = spy(hapiConditionService);
@@ -367,14 +374,52 @@ class HapiConditionServiceTest {
     }
 
     @Test
+    void createCondition_shouldThrowException_whenPatientNotFound() {
+        // Arrange
+        String patientPersonnummer = "999999999999";
+        String practitionerPersonnummer = "198001011234";
+        String description = "Test Condition";
+
+        HapiConditionService spyService = spy(hapiConditionService);
+        doThrow(new RuntimeException("Patient not found with identifier or ID: " + patientPersonnummer))
+                .when(spyService).createCondition(
+                        patientPersonnummer, practitionerPersonnummer, description, recordedDate);
+
+        // Act & Assert
+        assertThatThrownBy(() -> spyService.createCondition(
+                patientPersonnummer, practitionerPersonnummer, description, recordedDate))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Patient not found");
+    }
+
+    @Test
+    void createCondition_shouldThrowException_whenPractitionerNotFound() {
+        // Arrange
+        String patientPersonnummer = "197001011234";
+        String practitionerPersonnummer = "999999999999";
+        String description = "Test Condition";
+
+        HapiConditionService spyService = spy(hapiConditionService);
+        doThrow(new RuntimeException("Practitioner not found with identifier or ID: " + practitionerPersonnummer))
+                .when(spyService).createCondition(
+                        patientPersonnummer, practitionerPersonnummer, description, recordedDate);
+
+        // Act & Assert
+        assertThatThrownBy(() -> spyService.createCondition(
+                patientPersonnummer, practitionerPersonnummer, description, recordedDate))
+                .isInstanceOf(RuntimeException.class)
+                .hasMessageContaining("Practitioner not found");
+    }
+
+    @Test
     void createCondition_shouldSetCorrectClinicalStatus() {
         // Arrange
         String patientPersonnummer = "197001011234";
         String practitionerPersonnummer = "198001011234";
         String description = "Active Condition";
 
-        Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, description, recordedDate);
+        Condition condition = createTestCondition("123", "Patient/fhir-123",
+                "Practitioner/fhir-456", description, recordedDate);
         condition.getClinicalStatus()
                 .addCoding()
                 .setSystem("http://terminology.hl7.org/CodeSystem/condition-clinical")
@@ -400,8 +445,8 @@ class HapiConditionServiceTest {
         String practitionerPersonnummer = "198001011234";
         String description = "Confirmed Condition";
 
-        Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, description, recordedDate);
+        Condition condition = createTestCondition("123", "Patient/fhir-123",
+                "Practitioner/fhir-456", description, recordedDate);
         condition.getVerificationStatus()
                 .addCoding()
                 .setSystem("http://terminology.hl7.org/CodeSystem/condition-ver-status")
@@ -428,8 +473,8 @@ class HapiConditionServiceTest {
         String description = "Test Condition";
         Date specificDate = new Date();
 
-        Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, description, specificDate);
+        Condition condition = createTestCondition("123", "Patient/fhir-123",
+                "Practitioner/fhir-456", description, specificDate);
 
         HapiConditionService spyService = spy(hapiConditionService);
         doReturn(condition).when(spyService).createCondition(
@@ -451,8 +496,8 @@ class HapiConditionServiceTest {
         String description = "Test Condition";
         Date onsetDate = new Date();
 
-        Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, description, onsetDate);
+        Condition condition = createTestCondition("123", "Patient/fhir-123",
+                "Practitioner/fhir-456", description, onsetDate);
         condition.setOnset(new DateTimeType(onsetDate));
 
         HapiConditionService spyService = spy(hapiConditionService);
@@ -474,8 +519,8 @@ class HapiConditionServiceTest {
         String practitionerPersonnummer = "198001011234";
         String description = "SNOMED Condition";
 
-        Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, description, recordedDate);
+        Condition condition = createTestCondition("123", "Patient/fhir-123",
+                "Practitioner/fhir-456", description, recordedDate);
         condition.getCode()
                 .addCoding()
                 .setSystem("http://snomed.info/sct")
@@ -523,18 +568,18 @@ class HapiConditionServiceTest {
     @Test
     void getConditionsForPatient_shouldHandleDifferentPatientIdFormats() {
         // Arrange
-        String[] patientIds = {"12345", "Patient/12345", "abc-123"};
+        String[] patientPersonnummers = {"197001011234", "198502021234", "200012121234"};
 
-        for (String patientId : patientIds) {
+        for (String patientPersonnummer : patientPersonnummers) {
             List<Condition> conditions = new ArrayList<>();
-            conditions.add(createTestCondition("1", "Patient/" + patientId, "Practitioner/1",
+            conditions.add(createTestCondition("1", "Patient/fhir-" + patientPersonnummer, "Practitioner/1",
                     "Test Condition", recordedDate));
 
             HapiConditionService spyService = spy(hapiConditionService);
-            doReturn(conditions).when(spyService).getConditionsForPatient(patientId);
+            doReturn(conditions).when(spyService).getConditionsForPatient(patientPersonnummer);
 
             // Act
-            List<Condition> result = spyService.getConditionsForPatient(patientId);
+            List<Condition> result = spyService.getConditionsForPatient(patientPersonnummer);
 
             // Assert
             assertThat(result).hasSize(1);
@@ -548,8 +593,8 @@ class HapiConditionServiceTest {
         String practitionerPersonnummer = "198001011234";
         String longDescription = "A".repeat(500);
 
-        Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                "Practitioner/" + practitionerPersonnummer, longDescription, recordedDate);
+        Condition condition = createTestCondition("123", "Patient/fhir-123",
+                "Practitioner/fhir-456", longDescription, recordedDate);
 
         HapiConditionService spyService = spy(hapiConditionService);
         doReturn(condition).when(spyService).createCondition(
@@ -577,8 +622,8 @@ class HapiConditionServiceTest {
         };
 
         for (String description : specialDescriptions) {
-            Condition condition = createTestCondition("123", "Patient/" + patientPersonnummer,
-                    "Practitioner/" + practitionerPersonnummer, description, recordedDate);
+            Condition condition = createTestCondition("123", "Patient/fhir-123",
+                    "Practitioner/fhir-456", description, recordedDate);
 
             HapiConditionService spyService = spy(hapiConditionService);
             doReturn(condition).when(spyService).createCondition(

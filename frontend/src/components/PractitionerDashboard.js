@@ -1,14 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import MessagingSystem from './MessagingSystem';
 import ImageGallery from './ImageGallery';
 import SearchPanel from './SearchPanel';
-import API_CONFIG from '../config/api';
+import API_CONFIG, { fetchWithAuth } from '../config/api';
 
 function PractitionerDashboard({ user, onLogout }) {
     const [activeTab, setActiveTab] = useState('patients');
     const [patients, setPatients] = useState([]);
     const [selectedPatient, setSelectedPatient] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [error, setError] = useState(null);
 
     const isDoctor = user.role === 'DOCTOR';
 
@@ -20,14 +21,19 @@ function PractitionerDashboard({ user, onLogout }) {
 
     const fetchPatients = async () => {
         setLoading(true);
+        setError(null);
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
+            // Use fetchWithAuth instead of fetch
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/patients`);
             if (response.ok) {
                 const data = await response.json();
                 setPatients(data);
+            } else {
+                setError(`Could not load patients (${response.status})`);
             }
         } catch (error) {
             console.error('Error fetching patients:', error);
+            setError('Could not connect to server: ' + error.message);
         } finally {
             setLoading(false);
         }
@@ -103,6 +109,14 @@ function PractitionerDashboard({ user, onLogout }) {
             borderRadius: '4px',
             cursor: 'pointer',
             fontSize: '14px'
+        },
+        errorBox: {
+            background: '#fee',
+            border: '1px solid #fcc',
+            borderRadius: '8px',
+            padding: '20px',
+            color: '#c00',
+            marginBottom: '20px'
         }
     };
 
@@ -152,6 +166,18 @@ function PractitionerDashboard({ user, onLogout }) {
             </nav>
 
             <div style={styles.content}>
+                {error && (
+                    <div style={styles.errorBox}>
+                        <strong>Error:</strong> {error}
+                        <button
+                            onClick={fetchPatients}
+                            style={{ marginLeft: '20px', padding: '5px 10px' }}
+                        >
+                            Try again
+                        </button>
+                    </div>
+                )}
+
                 {activeTab === 'patients' && (
                     <div style={styles.card}>
                         <h2>Patient List</h2>
@@ -252,18 +278,15 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
         endTime: ''
     });
 
-    useEffect(() => {
-        fetchPatientData();
-    }, [patient.socialSecurityNumber]);
-
-    const fetchPatientData = async () => {
+    const fetchPatientData = useCallback(async () => {
         try {
             const patientPersonnummer = patient.socialSecurityNumber;
 
+            // Use fetchWithAuth for all API calls
             const [obsRes, condRes, encRes] = await Promise.all([
-                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientPersonnummer}`),
-                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientPersonnummer}`),
-                fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientPersonnummer}`)
+                fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations/patient/${patientPersonnummer}`),
+                fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions/patient/${patientPersonnummer}`),
+                fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters/patient/${patientPersonnummer}`)
             ]);
 
             if (obsRes.ok) {
@@ -281,17 +304,21 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
         } catch (error) {
             console.error('Error fetching patient data:', error);
         }
-    };
+    }, [patient.socialSecurityNumber]);
+
+    useEffect(() => {
+        fetchPatientData();
+    }, [fetchPatientData]);
 
     const handleAddObservation = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations`, {
+            // Use fetchWithAuth for POST request
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/observations`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     patientPersonnummer: patient.socialSecurityNumber,
-                    performerPersonnummer: null,
+                    performerPersonnummer: practitionerPersonnummer,
                     description: newObservation.description,
                     value: newObservation.value,
                     unit: newObservation.unit,
@@ -323,12 +350,12 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
     const handleAddCondition = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions`, {
+            // Use fetchWithAuth for POST request
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/conditions`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     patientPersonnummer: patient.socialSecurityNumber,
-                    practitionerPersonnummer: null,
+                    practitionerPersonnummer: practitionerPersonnummer,
                     description: newCondition.description,
                     assertedDate: newCondition.assertedDate
                 })
@@ -356,12 +383,12 @@ function PatientDetails({ patient, practitionerPersonnummer, isDoctor, onBack })
     const handleAddEncounter = async (e) => {
         e.preventDefault();
         try {
-            const response = await fetch(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters`, {
+            // Use fetchWithAuth for POST request
+            const response = await fetchWithAuth(`${API_CONFIG.CLINICAL_SERVICE}/api/v1/clinical/encounters`, {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     patientPersonnummer: patient.socialSecurityNumber,
-                    practitionerPersonnummer: null,
+                    practitionerPersonnummer: practitionerPersonnummer,
                     startTime: newEncounter.startTime,
                     endTime: newEncounter.endTime || null
                 })

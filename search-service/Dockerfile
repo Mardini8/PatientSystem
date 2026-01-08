@@ -1,22 +1,16 @@
-FROM registry.access.redhat.com/ubi8/openjdk-17:1.18
+FROM eclipse-temurin:17-jre-alpine
 
-ENV LANGUAGE='en_US:en'
+WORKDIR /app
 
-# Copy the built application
-COPY --chown=185 target/quarkus-app/lib/ /deployments/lib/
-COPY --chown=185 target/quarkus-app/*.jar /deployments/
-COPY --chown=185 target/quarkus-app/app/ /deployments/app/
-COPY --chown=185 target/quarkus-app/quarkus/ /deployments/quarkus/
-
-# Set working directory
-WORKDIR /deployments
-
-# Expose ports
 EXPOSE 8084
 
-# Set environment variables
-ENV JAVA_OPTS="-Dquarkus.http.host=0.0.0.0 -Djava.util.logging.manager=org.jboss.logmanager.LogManager"
-ENV JAVA_APP_JAR="/deployments/quarkus-run.jar"
+# Copy the Quarkus runner jar
+COPY target/quarkus-app/lib/ /app/lib/
+COPY target/quarkus-app/*.jar /app/
+COPY target/quarkus-app/app/ /app/app/
+COPY target/quarkus-app/quarkus/ /app/quarkus/
 
-# Run the application
-ENTRYPOINT [ "java", "-jar", "/deployments/quarkus-run.jar" ]
+# Set production profile
+ENV QUARKUS_PROFILE=prod
+
+ENTRYPOINT ["java", "-jar", "/app/quarkus-run.jar"]

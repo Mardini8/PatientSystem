@@ -16,6 +16,7 @@ import java.util.Optional;
 public class HapiEncounterService {
 
     private final HapiClientService hapiClient;
+    private final FhirLookupService fhirLookupService;
 
     public List<Encounter> getAllEncounters() {
         IGenericClient client = hapiClient.getClient();
@@ -32,14 +33,17 @@ public class HapiEncounterService {
                 .toList();
     }
 
-    public List<Encounter> getEncountersForPatient(String patientId) {
+    public List<Encounter> getEncountersForPatient(String patientPersonnummer) {
         try {
             IGenericClient client = hapiClient.getClient();
+
+            // Look up the actual FHIR ID from personnummer
+            String patientFhirId = fhirLookupService.findPatientIdByPersonnummer(patientPersonnummer);
 
             Bundle bundle = client
                     .search()
                     .forResource(Encounter.class)
-                    .where(Encounter.PATIENT.hasId(patientId))
+                    .where(Encounter.PATIENT.hasId(patientFhirId))
                     .returnBundle(Bundle.class)
                     .execute();
 
@@ -48,7 +52,7 @@ public class HapiEncounterService {
                     .map(entry -> (Encounter) entry.getResource())
                     .toList();
         } catch (Exception e) {
-            System.err.println("Could not fetch encounters for patient: " + patientId);
+            System.err.println("Could not fetch encounters for patient: " + patientPersonnummer);
             e.printStackTrace();
             return List.of();
         }
@@ -79,6 +83,10 @@ public class HapiEncounterService {
     ) {
         IGenericClient client = hapiClient.getClient();
 
+        // Look up actual FHIR IDs from personnummer
+        String patientFhirId = fhirLookupService.findPatientIdByPersonnummer(patientPersonnummer);
+        System.out.println("Creating encounter - Patient personnummer: " + patientPersonnummer + " -> FHIR ID: " + patientFhirId);
+
         Encounter encounter = new Encounter();
         encounter.setStatus(Encounter.EncounterStatus.FINISHED);
 
@@ -93,9 +101,13 @@ public class HapiEncounterService {
                 .setCode("185349003")
                 .setDisplay("Encounter for check up (procedure)");
 
-        encounter.setSubject(new Reference("Patient/" + patientPersonnummer));
+        // Use the FHIR ID, not the personnummer
+        encounter.setSubject(new Reference("Patient/" + patientFhirId));
 
         if (practitionerPersonnummer != null && !practitionerPersonnummer.isEmpty()) {
+            String practitionerFhirId = fhirLookupService.findPractitionerIdByPersonnummer(practitionerPersonnummer);
+            System.out.println("Creating encounter - Practitioner personnummer: " + practitionerPersonnummer + " -> FHIR ID: " + practitionerFhirId);
+
             Encounter.EncounterParticipantComponent participant = encounter.addParticipant();
 
             participant.addType()
@@ -104,7 +116,7 @@ public class HapiEncounterService {
                     .setCode("PPRF")
                     .setDisplay("primary performer");
 
-            participant.setIndividual(new Reference("Practitioner/" + practitionerPersonnummer));
+            participant.setIndividual(new Reference("Practitioner/" + practitionerFhirId));
 
             Period participantPeriod = new Period();
             participantPeriod.setStart(startTime);
